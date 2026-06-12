@@ -5,7 +5,48 @@ filings, and newsletter/social chatter, processes it into explained stock theses
 and serves them as a daily Tinder-style swipe deck — alongside a personal
 portfolio tracker.
 
-**Status:** spec finalized (2026-06-12), v0.1 not yet started.
+**Status:** v0.1 thin slice shipped (2026-06-12) — all four screens working
+end-to-end. See *Running the app* below.
+
+---
+
+## Running the app
+
+Prerequisites: Node 20+, and the **Expo Go** app on your phone (App Store / Play Store).
+
+```bash
+npm install
+npx expo start
+```
+
+Scan the QR code with Expo Go (Android) or the Camera app (iOS). The app starts
+in **demo mode** — every screen works with illustrative data so you can explore
+immediately.
+
+To go live, add keys in **Settings**:
+
+1. **Finnhub** (free): sign up at [finnhub.io](https://finnhub.io) → copy your
+   API key. Unlocks live quotes, analyst trends, news, profiles — and real deck
+   builds (a build takes ~2 minutes on the free tier's rate limit).
+2. **Anthropic** (~$1–5/month at default settings): create a key at
+   [console.anthropic.com](https://console.anthropic.com). Unlocks Claude-written
+   theses on each card; without it the app generates template theses from the
+   raw signals.
+
+Keys are stored in the device keychain and sent only to Finnhub/Anthropic.
+
+### Code map
+
+```
+src/app/        screens (expo-router): (tabs)/ portfolio·discover·catalog·settings,
+                company/[symbol] detail, add-position modal
+src/engine/     the analysis pipeline: signals → consensus gate → scoring →
+                personalization → thesis writing (pure TS, lifts to a server in v0.2)
+src/api/        finnhub · stooq (price history) · EDGAR (filings) · anthropic
+src/store/      zustand stores persisted to AsyncStorage (portfolio, deck, catalog,
+                settings, market cache)
+src/components/ swipe deck (core Animated, no native deps) + hand-rolled SVG charts
+```
 
 ---
 
@@ -151,11 +192,17 @@ tickers for alert-worthy events — it does not rebuild the deck.
 
 ## Roadmap
 
-- **v0.1 — thin slice (next up)**: all four screens working end-to-end at basic
-  depth — manual portfolio with live quotes + core breakdown charts; nightly
-  pipeline on a reduced source set (Finnhub news + recommendation trends + EDGAR)
-  feeding a real swipe deck; catalog with detail view (thesis + basic charts);
-  settings with deck + notification toggles.
+- **v0.1 — thin slice (✅ shipped)**: all four screens working end-to-end —
+  manual portfolio with live quotes + breakdown charts (sector/holding donuts,
+  P/L bars, 3-month value line); the analysis pipeline on the reduced source set
+  (Finnhub recommendation trends + company news + EDGAR 8-K check) feeding a
+  real swipe deck with the 2-source consensus gate, 21-day left-swipe cooldown,
+  taste weighting with "why you're seeing this" tags, and Claude-written theses
+  (template fallback without a key); catalog with quick-peek and full detail
+  view; settings with keys, deck tuning, and notification preferences.
+  *v0.1 simplification:* the pipeline runs **on-device when you open Discover**
+  rather than on a nightly server — same logic, different trigger; it lifts into
+  the Supabase scheduled function in v0.2 unchanged.
 - **v0.2**: full source set (RSS newsletters, Reddit, StockTwits), personalization
   weights live, intraday alert watcher + all three push types, richer infographics.
 - **v0.3**: deck tuning UI depth, card visuals upgrade, portfolio analytics
