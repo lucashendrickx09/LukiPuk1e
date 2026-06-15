@@ -55,11 +55,10 @@ jobs:
           # Public, safe-to-ship values. Unset → app builds in local-only mode.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      # Pages must be enabled once in Settings → Pages → Source: "GitHub Actions".
+      # (The Actions token can't create the Pages site itself.) After that, this
+      # reads the config and every push deploys automatically.
       - uses: actions/configure-pages@v5
-        with:
-          # Turn on Pages automatically on first run, so there are no manual
-          # settings to flip (needs the repo to be public, which it is).
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: study-calendar/dist
