@@ -4,7 +4,9 @@ import { MONTHS } from './lib/dates'
 import { loadStates, saveStates } from './lib/storage'
 import { recommendDays, resolveSchedule } from './lib/schedule'
 import type { BlockStates } from './lib/schedule'
+import { useSync } from './lib/useSync'
 import Header from './components/Header'
+import SyncButton from './components/SyncButton'
 import SubjectBar from './components/SubjectBar'
 import WeekProgress from './components/WeekProgress'
 import MonthNav from './components/MonthNav'
@@ -78,11 +80,17 @@ export default function App() {
     })
   }, [])
 
+  // Cross-device sync (Supabase). No-op until configured + a passphrase is set.
+  const sync = useSync(states, setStates)
+
   const month = MONTHS[monthIndex]
 
   return (
     <div className="mx-auto max-w-[1000px] px-4 pb-20 pt-6 sm:px-5">
-      <Header />
+      <div className="flex items-start justify-between gap-4">
+        <Header />
+        <SyncButton info={sync} />
+      </div>
       <SubjectBar hidden={hidden} onToggle={toggleSubject} />
       <WeekProgress resolution={resolution} />
 

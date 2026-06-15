@@ -82,25 +82,79 @@ after the first visit). New versions update automatically on next launch.
 
 ---
 
-## Syncing across devices
+## Syncing across devices (Supabase)
 
 By default your completions and reschedules live in the browser's `localStorage`,
-which is **per-device** — your phone and laptop each keep their own copy. A static
-site can't sync on its own; it needs a small shared store. Options, simplest first:
+which is **per-device**. Optional sync stores them in a tiny **Supabase** document
+so every device that enters the same passphrase shares one calendar — changes
+appear within seconds. There's **no login**: the passphrase is the link between
+devices (it's hashed to a document id, never sent in the clear as a key).
 
-1. **Manual export / import** (no account) — copy your data out on one device and
-   paste it into another. Zero infrastructure, but you sync by hand.
-2. **A free cloud store** (e.g. **Supabase** or **Firebase**) — the app reads/writes
-   one document so every device sees the same data, near-instantly. Free tier, a
-   handful of lines of client code, and the public key is safe to ship. Best for
-   real auto-sync. *(You create the free project and paste in two keys.)*
-3. **Your own tiny backend** (a Vercel / Cloudflare function + KV store) if you'd
-   rather keep credentials server-side.
+If the two env vars below aren't set, the app simply stays local-only — and the
+Supabase client is tree-shaken out of the bundle entirely, so you pay nothing for
+a feature you're not using. The **Sync** button (top-right) tells you the state.
 
-Because it's single-user, no login is required — the app can point at one fixed
-document (optionally guarded by a passphrase). The storage layer is isolated in
-[`src/lib/storage.ts`](src/lib/storage.ts), so adding any of these is a contained
-change.
+### One-time setup
+
+1. **Create a free project** at [supabase.com](https://supabase.com).
+2. **Create the table + access rules.** In the project's **SQL Editor**, run:
+
+   ```sql
+   create table if not exists study_calendar_state (
+     id text primary key,
+     data jsonb not null default '{}'::jsonb,
+     updated_at timestamptz not null default now()
+   );
+
+   -- bump updated_at on every write (used to arbitrate last-writer-wins)
+   create or replace function study_calendar_touch()
+   returns trigger language plpgsql as $$
+   begin new.updated_at = now(); return new; end $$;
+   drop trigger if exists study_calendar_touch on study_calendar_state;
+   create trigger study_calendar_touch
+     before update on study_calendar_state
+     for each row execute function study_calendar_touch();
+
+   -- single-user app, no login: allow anonymous access. Your data is only
+   -- reachable by its id, which is the SHA-256 of your private passphrase.
+   alter table study_calendar_state enable row level security;
+   create policy "anon read"   on study_calendar_state for select using (true);
+   create policy "anon insert" on study_calendar_state for insert with check (true);
+   create policy "anon update" on study_calendar_state for update using (true) with check (true);
+
+   -- optional: instant push updates (the app also syncs on focus without this)
+   alter publication supabase_realtime add table study_calendar_state;
+   ```
+
+3. **Get your keys.** Project → **Settings → API** → copy the **Project URL** and
+   the **anon public** key (the anon key is meant to be shipped in the client).
+4. **Set the env vars.** Locally, copy `.env.example` to `.env.local` and fill in:
+
+   ```
+   VITE_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+   VITE_SUPABASE_ANON_KEY=YOUR-PUBLIC-ANON-KEY
+   ```
+
+   For your deployed site, add the **same two variables** in your host's settings
+   (Vercel: Project → Settings → Environment Variables; Netlify: Site configuration
+   → Environment variables) and redeploy. Restart `npm run dev` after changing them.
+5. **Link your devices.** Open the app → **Sync** → enter a passphrase → **Connect**.
+   Enter the **same passphrase** on your phone and computer. Done — they now share data.
+
+> **Security:** because there's no login, anyone who knows your passphrase (and has
+> the public anon key from the site) can read and edit your calendar. Use a
+> non-obvious passphrase and keep it private. For a personal study planner that
+> trade-off is usually fine; if you want stricter access, add Supabase Auth and
+> tighten the RLS policies to `auth.uid()`.
+
+### How conflicts are handled
+
+Sync is last-writer-wins on the whole document, arbitrated by the server's
+`updated_at`. A device pushes its changes (debounced) and pulls on realtime
+events, tab focus, and a light interval. For one person using one device at a
+time this is conflict-free; simultaneous offline edits on two devices would let
+the later save win. All the sync code is isolated in
+[`src/lib/sync.ts`](src/lib/sync.ts) + [`src/lib/useSync.ts`](src/lib/useSync.ts).
 
 ---
 
