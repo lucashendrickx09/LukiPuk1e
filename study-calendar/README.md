@@ -36,6 +36,8 @@ topics, "what to do", exam-focused debriefs, and video links.
 - **Today highlight**, **keyboard support** (Esc closes the modal), click-outside
   to close, smooth modal animation.
 - **Mobile-responsive** — works as a real calendar on a phone.
+- **Installable PWA** — add it to your phone's home screen or your desktop and use
+  it offline; it updates itself on next launch.
 
 ## Tech stack
 
@@ -62,6 +64,43 @@ every task is done and a ⤳ marks days a task was moved onto; the colored dots 
 weekly progress follow the task to its new day.
 
 All of this is per-browser (`localStorage`) — nothing is sent anywhere.
+
+---
+
+## Install it as an app
+
+It's a PWA, so you can install it on any device straight from the browser — no App
+Store, no accounts:
+
+- **iPhone / iPad (Safari):** open the site → Share → **Add to Home Screen**.
+- **Android (Chrome):** open the site → menu (⋮) → **Install app** / **Add to Home Screen**.
+- **Desktop (Chrome / Edge):** click the **Install** icon in the address bar
+  (or menu → **Install Study Calendar**).
+
+It launches full-screen with its own icon and works **offline** (it caches itself
+after the first visit). New versions update automatically on next launch.
+
+---
+
+## Syncing across devices
+
+By default your completions and reschedules live in the browser's `localStorage`,
+which is **per-device** — your phone and laptop each keep their own copy. A static
+site can't sync on its own; it needs a small shared store. Options, simplest first:
+
+1. **Manual export / import** (no account) — copy your data out on one device and
+   paste it into another. Zero infrastructure, but you sync by hand.
+2. **A free cloud store** (e.g. **Supabase** or **Firebase**) — the app reads/writes
+   one document so every device sees the same data, near-instantly. Free tier, a
+   handful of lines of client code, and the public key is safe to ship. Best for
+   real auto-sync. *(You create the free project and paste in two keys.)*
+3. **Your own tiny backend** (a Vercel / Cloudflare function + KV store) if you'd
+   rather keep credentials server-side.
+
+Because it's single-user, no login is required — the app can point at one fixed
+document (optionally guarded by a passphrase). The storage layer is isolated in
+[`src/lib/storage.ts`](src/lib/storage.ts), so adding any of these is a contained
+change.
 
 ---
 
