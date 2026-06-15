@@ -1,0 +1,75 @@
+# Builds study-calendar/ and publishes it to GitHub Pages.
+#
+# Before this runs, in the repo Settings:
+#   • Pages → Build and deployment → Source: "GitHub Actions"
+#   • Secrets and variables → Actions → Variables tab → add (optional, for sync):
+#       VITE_SUPABASE_URL        = https://YOUR-PROJECT-REF.supabase.co
+#       VITE_SUPABASE_ANON_KEY   = your anon/public key
+#     (Leave them unset and the app simply deploys in local-only mode.)
+#
+# The workflow file + study-calendar/ must live on the repo's DEFAULT branch for
+# Pages to deploy (GitHub only allows the default branch by default). Either merge
+# this branch into the default branch, or set this branch as the default.
+
+name: Deploy study-calendar to Pages
+
+on:
+  push:
+    # Both current branches are listed so a push to whichever becomes default
+    # triggers a deploy. Update if you rename/replace the default branch.
+    branches:
+      - claude/charming-mccarthy-ho8nq4
+      - claude/determined-franklin-q9ibdz
+    paths:
+      - 'study-calendar/**'
+      - '.github/workflows/deploy-study-calendar.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: study-calendar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: study-calendar/package-lock.json
+      - run: npm ci
+      - name: Build
+        run: npm run build
+        env:
+          # Public, safe-to-ship values. Unset → app builds in local-only mode.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      - uses: actions/configure-pages@v5
+        with:
+          # Turn on Pages automatically on first run, so there are no manual
+          # settings to flip (needs the repo to be public, which it is).
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: study-calendar/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

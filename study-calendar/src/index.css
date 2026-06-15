@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Dark theme tokens (Tailwind v4 @theme → utilities + CSS vars)
+   Each token becomes a utility (e.g. bg-panel, text-ink, border-edge)
+   AND a CSS variable (var(--color-gold)) usable in inline styles.
+   ============================================================ */
+@theme {
+  --color-base: #0d1117;    /* page background          */
+  --color-panel: #161b22;   /* cards / modal            */
+  --color-panel2: #1c2230;  /* nested panels / callouts */
+  --color-edge: #2a313c;    /* borders / hairlines      */
+  --color-ink: #e6edf3;     /* primary text             */
+  --color-muted: #9aa7b4;   /* secondary text           */
+  --color-faint: #6b7785;   /* tertiary text            */
+  --color-gold: #e8b339;    /* accent                   */
+
+  /* Modal open animation */
+  --animate-pop: pop 0.2s ease;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* respect iOS safe areas when added to home screen */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Thin, theme-matched scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-edge) transparent;
+}
+
+/* Gold emphasis inside the debrief callout (authored <b> tags from plan.ts) */
+.debrief-box b {
+  color: var(--color-gold);
+  font-weight: 600;
+}
