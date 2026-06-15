@@ -1,5 +1,7 @@
 # Study Calendar
 
+**Live app:** https://lucashendrickx09.github.io/LukiPuk1e/
+
 A personal IBDP summer study calendar — a single-purpose static web app. No auth,
 no backend, no database. Everything lives in one editable data file
 ([`src/plan.ts`](src/plan.ts)) and runs entirely in the browser.
