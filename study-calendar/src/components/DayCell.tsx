@@ -1,10 +1,13 @@
-import { SUBJECTS, visibleBlocks } from '../plan'
+import { SUBJECTS } from '../plan'
 import type { DayPlan, SubjectCode } from '../plan'
+import type { DayResolution } from '../lib/schedule'
+import { subjectsForDay } from '../lib/schedule'
 
 interface Props {
   date: Date
   iso: string
   plan: DayPlan | undefined
+  res: DayResolution | undefined
   inWindow: boolean
   today: boolean
   hidden: Set<SubjectCode>
@@ -20,7 +23,7 @@ function tint(plan: DayPlan | undefined): { background?: string; borderColor?: s
   return {}
 }
 
-export default function DayCell({ date, iso, plan, inWindow, today, hidden, onOpen }: Props) {
+export default function DayCell({ date, iso, plan, res, inWindow, today, hidden, onOpen }: Props) {
   const dayNum = date.getDate()
 
   // Out-of-window days: visible for grid alignment but greyed and inert.
@@ -32,9 +35,10 @@ export default function DayCell({ date, iso, plan, inWindow, today, hidden, onOp
     )
   }
 
-  const codes = [...new Set(visibleBlocks(plan).map((b) => b.subject))].filter(
-    (c) => !hidden.has(c),
-  )
+  const active = res?.active ?? []
+  const codes = subjectsForDay(res).filter((c) => !hidden.has(c))
+  const allDone = active.length > 0 && active.every((a) => a.done)
+  const hasIncoming = active.some((a) => a.incoming)
 
   const tagline =
     plan?.rest && !plan.blocks
@@ -55,11 +59,23 @@ export default function DayCell({ date, iso, plan, inWindow, today, hidden, onOp
     >
       <div className="flex items-start text-[13px] font-semibold leading-none">
         <span>{dayNum}</span>
-        {plan?.sport && (
-          <span className="ml-auto text-[9px] leading-none text-gold" aria-label="sport event">
-            ★
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-0.5 leading-none">
+          {hasIncoming && (
+            <span className="text-[9px] text-[#bd6cf0]" title="task rescheduled to this day">
+              ⤳
+            </span>
+          )}
+          {allDone && (
+            <span className="text-[9px] text-[#4cae8a]" title="all tasks complete">
+              ✓
+            </span>
+          )}
+          {plan?.sport && (
+            <span className="text-[9px] text-gold" aria-label="sport event">
+              ★
+            </span>
+          )}
+        </span>
       </div>
 
       {tagline && (

@@ -1,0 +1,143 @@
+/* ============================================================================
+ *  schedule.ts — the live schedule layer.
+ * ----------------------------------------------------------------------------
+ *  plan.ts is the immutable seed. This module merges it with the user's saved
+ *  per-block state (done / rescheduled) so tasks can be approved complete or
+ *  moved to another day. A rescheduled block keeps its ORIGIN id (the static
+ *  "iso#index"), so it has a stable identity no matter where it currently lives.
+ * ========================================================================== */
+
+import { blockId, PLAN, visibleBlocks } from '../plan'
+import type { StudyBlock, SubjectCode } from '../plan'
+import { planDays } from './dates'
+
+/** Saved state for one block, keyed by its origin id. Absent = pending. */
+export interface BlockState {
+  /** Approved complete. */
+  done?: boolean
+  /** ISO date the block was rescheduled to (origin day is unchanged). */
+  movedTo?: string
+}
+
+export type BlockStates = Record<string, BlockState>
+
+/** A block placed on a day, with its live status resolved. */
+export interface ResolvedBlock {
+  block: StudyBlock
+  /** Origin id "YYYY-MM-DD#index" — stable across reschedules. */
+  id: string
+  /** The day this block was originally scheduled. */
+  originIso: string
+  done: boolean
+  /** Current scheduled day, when moved away from its origin. */
+  movedTo?: string
+  /** True when shown on a day other than its origin (rescheduled in). */
+  incoming: boolean
+}
+
+export interface DayResolution {
+  /** Blocks that currently live on this day (native + rescheduled in). */
+  active: ResolvedBlock[]
+  /** Native blocks that have been rescheduled to another day. */
+  movedAway: ResolvedBlock[]
+}
+
+/**
+ * Resolve the whole plan window into per-day active / moved-away blocks.
+ * Built once per state change and shared by the grid, modal and progress.
+ */
+export function resolveSchedule(states: BlockStates): Map<string, DayResolution> {
+  const days = planDays()
+  const map = new Map<string, DayResolution>()
+  for (const iso of days) map.set(iso, { active: [], movedAway: [] })
+
+  // Native blocks: each either stays put or is parked in movedAway.
+  for (const iso of days) {
+    const res = map.get(iso)!
+    visibleBlocks(PLAN[iso]).forEach((block, i) => {
+      const id = blockId(iso, i)
+      const st = states[id]
+      const movedTo = st?.movedTo && st.movedTo !== iso ? st.movedTo : undefined
+      const resolved: ResolvedBlock = {
+        block,
+        id,
+        originIso: iso,
+        done: !!st?.done,
+        movedTo,
+        incoming: false,
+      }
+      if (movedTo) res.movedAway.push(resolved)
+      else res.active.push(resolved)
+    })
+  }
+
+  // Place moved blocks onto their target day as "incoming".
+  for (const res of map.values()) {
+    for (const moved of res.movedAway) {
+      const target = moved.movedTo ? map.get(moved.movedTo) : undefined
+      if (target) {
+        target.active.push({ ...moved, incoming: true })
+      }
+      // If the target is somehow outside the window the block just isn't shown;
+      // the reschedule picker constrains choices to the window so this is rare.
+    }
+  }
+
+  return map
+}
+
+/** Distinct subjects currently on a day → the cell's colored dots. */
+export function subjectsForDay(res: DayResolution | undefined): SubjectCode[] {
+  if (!res) return []
+  return [...new Set(res.active.map((r) => r.block.subject))]
+}
+
+export interface DayRecommendation {
+  iso: string
+  /** Short human reason, e.g. "No other tasks" or "Same subject". */
+  reason: string
+}
+
+/**
+ * Suggest the best days to move a block to. Lower score = better:
+ * favours soon, lightly-loaded days; nudges toward days already studying the
+ * same subject; avoids the past, visitor days, and skips rest/holiday days.
+ * These are suggestions only — the UI still lets the user pick ANY day.
+ */
+export function recommendDays(
+  originIso: string,
+  subject: SubjectCode,
+  resolution: Map<string, DayResolution>,
+  count = 3,
+): DayRecommendation[] {
+  const days = planDays()
+  const originIdx = days.indexOf(originIso)
+
+  return days
+    .map((iso, idx) => ({ iso, idx }))
+    .filter(({ iso }) => {
+      if (iso === originIso) return false
+      const p = PLAN[iso]
+      return !(p?.rest || p?.holiday) // protect rest + holiday days
+    })
+    .map(({ iso, idx }) => {
+      const res = resolution.get(iso)
+      const load = res ? res.active.length : 0
+      const hasSubject = res ? res.active.some((r) => r.block.subject === subject) : false
+      const isPast = idx < originIdx
+      const dist = Math.abs(idx - originIdx)
+
+      let score = load * 2 + dist
+      if (isPast) score += 6
+      if (PLAN[iso]?.visitor) score += 4
+      if (hasSubject) score -= 2
+
+      return { iso, score, load, hasSubject }
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, count)
+    .map(({ iso, load, hasSubject }) => ({
+      iso,
+      reason: load === 0 ? 'No other tasks' : hasSubject ? 'Same subject' : `${load} task${load > 1 ? 's' : ''}`,
+    }))
+}

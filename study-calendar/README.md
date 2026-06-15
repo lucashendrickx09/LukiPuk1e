@@ -26,7 +26,11 @@ topics, "what to do", exam-focused debriefs, and video links.
 - **Video links** are YouTube *search* URLs scoped to trusted IB channels, so they
   always resolve to current results — and they're data-driven, so you can swap in
   specific video URLs later.
-- **Completion tracking**: tick off each study block; state persists to
+- **Approve or reschedule each task**: mark a study block complete, or — if you
+  can't do it — reschedule it to another day. The app **recommends** good days
+  (soonest, lightest, same-subject; avoids rest/holiday) but you pick any day.
+  Rescheduled tasks actually move: a "rescheduled →" stub stays on the origin day
+  and the task reappears on the target day tagged "moved from". State persists to
   `localStorage`, with a per-week progress bar.
 - **Subject filter + legend**: tap a subject to show/hide its dots on the grid.
 - **Today highlight**, **keyboard support** (Esc closes the modal), click-outside
@@ -37,6 +41,27 @@ topics, "what to do", exam-focused debriefs, and video links.
 
 Vite · React · TypeScript · Tailwind CSS v4 · date-fns. Builds to a static
 `dist/` folder you can host anywhere.
+
+---
+
+## Using it day to day
+
+Open a day and, for each task, either:
+
+- **✓ Mark complete** — approves the task as done (it shows struck-through and
+  counts toward that week's progress). Hit **Undo** to revert.
+- **Can't do — reschedule** — opens a small picker with up to three **recommended
+  days** (it favours the soonest, lightest days and days already studying the same
+  subject, and skips rest/holiday days) plus a date field to choose **any** day in
+  the window. Recommendations are only suggestions — you decide.
+
+A rescheduled task **moves**: its origin day keeps a dimmed "rescheduled → {day}"
+stub (with **Undo**), and the task reappears on the target day tagged "moved from
+{day}", where you can complete or move it again. On the grid, a ✓ marks days where
+every task is done and a ⤳ marks days a task was moved onto; the colored dots and
+weekly progress follow the task to its new day.
+
+All of this is per-browser (`localStorage`) — nothing is sent anywhere.
 
 ---
 

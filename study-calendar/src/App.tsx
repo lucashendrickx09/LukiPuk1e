@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SubjectCode } from './plan'
 import { MONTHS } from './lib/dates'
-import { loadCompleted, saveCompleted } from './lib/storage'
+import { loadStates, saveStates } from './lib/storage'
+import { recommendDays, resolveSchedule } from './lib/schedule'
+import type { BlockStates } from './lib/schedule'
 import Header from './components/Header'
 import SubjectBar from './components/SubjectBar'
 import WeekProgress from './components/WeekProgress'
@@ -12,22 +14,60 @@ import DayModal from './components/DayModal'
 export default function App() {
   const [monthIndex, setMonthIndex] = useState(0)
   const [openIso, setOpenIso] = useState<string | null>(null)
-  const [completed, setCompleted] = useState<Set<string>>(loadCompleted)
+  const [states, setStates] = useState<BlockStates>(loadStates)
   const [hidden, setHidden] = useState<Set<SubjectCode>>(() => new Set())
 
-  // Persist completion to localStorage whenever it changes.
+  // Persist block state (done / rescheduled) whenever it changes.
   useEffect(() => {
-    saveCompleted(completed)
-  }, [completed])
+    saveStates(states)
+  }, [states])
 
-  const toggleBlock = useCallback((id: string) => {
-    setCompleted((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
+  // Live schedule (static plan merged with saved state), shared everywhere.
+  const resolution = useMemo(() => resolveSchedule(states), [states])
+
+  // Update one block's saved state, dropping the entry when it returns to default.
+  const patchState = useCallback(
+    (id: string, change: (cur: { done?: boolean; movedTo?: string }) => void) => {
+      setStates((prev) => {
+        const next = { ...prev }
+        const cur = { ...(next[id] ?? {}) }
+        change(cur)
+        if (!cur.done && !cur.movedTo) delete next[id]
+        else next[id] = cur
+        return next
+      })
+    },
+    [],
+  )
+
+  const setDone = useCallback(
+    (id: string, done: boolean) => patchState(id, (cur) => {
+      if (done) cur.done = true
+      else delete cur.done
+    }),
+    [patchState],
+  )
+
+  const reschedule = useCallback(
+    (id: string, toIso: string) => patchState(id, (cur) => {
+      const origin = id.split('#')[0]
+      if (toIso === origin) delete cur.movedTo
+      else cur.movedTo = toIso
+    }),
+    [patchState],
+  )
+
+  const undoMove = useCallback(
+    (id: string) => patchState(id, (cur) => {
+      delete cur.movedTo
+    }),
+    [patchState],
+  )
+
+  const recommend = useCallback(
+    (originIso: string, subject: SubjectCode) => recommendDays(originIso, subject, resolution),
+    [resolution],
+  )
 
   const toggleSubject = useCallback((code: SubjectCode) => {
     setHidden((prev) => {
@@ -44,7 +84,7 @@ export default function App() {
     <div className="mx-auto max-w-[1000px] px-4 pb-20 pt-6 sm:px-5">
       <Header />
       <SubjectBar hidden={hidden} onToggle={toggleSubject} />
-      <WeekProgress completed={completed} />
+      <WeekProgress resolution={resolution} />
 
       <MonthNav
         year={month.year}
@@ -58,6 +98,7 @@ export default function App() {
       <CalendarGrid
         year={month.year}
         month={month.month}
+        resolution={resolution}
         hidden={hidden}
         onOpen={setOpenIso}
       />
@@ -73,8 +114,11 @@ export default function App() {
       {openIso && (
         <DayModal
           iso={openIso}
-          completed={completed}
-          onToggleBlock={toggleBlock}
+          resolution={resolution.get(openIso)}
+          onSetDone={setDone}
+          onReschedule={reschedule}
+          onUndoMove={undoMove}
+          onRecommend={recommend}
           onClose={() => setOpenIso(null)}
         />
       )}

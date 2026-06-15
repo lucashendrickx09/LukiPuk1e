@@ -60,6 +60,17 @@ export function isToday(date: Date): boolean {
   return isSameDay(date, new Date())
 }
 
+/** Every ISO date inside the plan window, in order. */
+export function planDays(): string[] {
+  const days: string[] = []
+  let d = PLAN_START
+  while (d <= PLAN_END) {
+    days.push(isoOf(d))
+    d = addDays(d, 1)
+  }
+  return days
+}
+
 export interface WeekInfo {
   /** ISO dates within this week that fall inside the plan window. */
   isoDays: string[]

@@ -1,16 +1,29 @@
 import { useEffect, useRef } from 'react'
-import { blockId, PLAN, SUBJECTS, visibleBlocks } from '../plan'
-import type { StudyBlock } from '../plan'
+import { PLAN, SUBJECTS } from '../plan'
+import type { SubjectCode } from '../plan'
+import type { DayRecommendation, DayResolution, ResolvedBlock } from '../lib/schedule'
 import { dayLabel } from '../lib/dates'
+import BlockItem from './BlockItem'
 
 interface Props {
   iso: string
-  completed: Set<string>
-  onToggleBlock: (id: string) => void
+  resolution: DayResolution | undefined
+  onSetDone: (id: string, done: boolean) => void
+  onReschedule: (id: string, toIso: string) => void
+  onUndoMove: (id: string) => void
+  onRecommend: (originIso: string, subject: SubjectCode) => DayRecommendation[]
   onClose: () => void
 }
 
-export default function DayModal({ iso, completed, onToggleBlock, onClose }: Props) {
+export default function DayModal({
+  iso,
+  resolution,
+  onSetDone,
+  onReschedule,
+  onUndoMove,
+  onRecommend,
+  onClose,
+}: Props) {
   const plan = PLAN[iso]
   const closeRef = useRef<HTMLButtonElement>(null)
 
@@ -33,7 +46,9 @@ export default function DayModal({ iso, completed, onToggleBlock, onClose }: Pro
     }
   }, [])
 
-  const blocks = visibleBlocks(plan)
+  const active = resolution?.active ?? []
+  const movedAway = resolution?.movedAway ?? []
+  const hasContent = active.length > 0 || movedAway.length > 0
   const title =
     plan?.theme ?? (plan?.holiday ? 'Holiday' : plan?.rest ? 'Rest day' : 'Free day')
 
@@ -84,15 +99,21 @@ export default function DayModal({ iso, completed, onToggleBlock, onClose }: Pro
             </div>
           )}
 
-          {blocks.length > 0 ? (
-            blocks.map((b, i) => (
-              <BlockView
-                key={i}
-                block={b}
-                checked={completed.has(blockId(iso, i))}
-                onToggle={() => onToggleBlock(blockId(iso, i))}
-              />
-            ))
+          {hasContent ? (
+            <>
+              {active.map((rb) => (
+                <BlockItem
+                  key={rb.id}
+                  block={rb}
+                  onSetDone={onSetDone}
+                  onReschedule={onReschedule}
+                  onRecommend={onRecommend}
+                />
+              ))}
+              {movedAway.map((rb) => (
+                <MovedAwayStub key={rb.id} block={rb} onUndoMove={onUndoMove} />
+              ))}
+            </>
           ) : plan?.holiday ? (
             <EmptyDay
               big="Holiday — fully off"
@@ -118,79 +139,38 @@ export default function DayModal({ iso, completed, onToggleBlock, onClose }: Pro
   )
 }
 
-function BlockView({
+/** Compact stub on the origin day for a task that's been rescheduled elsewhere. */
+function MovedAwayStub({
   block,
-  checked,
-  onToggle,
+  onUndoMove,
 }: {
-  block: StudyBlock
-  checked: boolean
-  onToggle: () => void
+  block: ResolvedBlock
+  onUndoMove: (id: string) => void
 }) {
-  const sub = SUBJECTS[block.subject]
-
+  const sub = SUBJECTS[block.block.subject]
   return (
-    <div className="border-b border-edge/60 py-4 last:border-b-0">
-      {/* Subject pill + time */}
-      <div className="mb-2.5 flex items-center gap-2.5">
+    <div className="border-b border-edge/60 py-3 last:border-b-0">
+      <div className="flex items-center gap-2.5">
         <span
-          className="rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide"
+          className="rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide opacity-60"
           style={{ background: `${sub.color}22`, color: sub.color }}
         >
           {sub.name}
         </span>
-        {block.time && <span className="ml-auto text-[11.5px] text-faint">{block.time}</span>}
+        <span className="text-[13.5px] text-faint line-through">{block.block.topic}</span>
       </div>
-
-      {/* Topic heading with completion checkbox */}
-      <label className="flex cursor-pointer items-start gap-2.5">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={onToggle}
-          className="mt-1 h-4 w-4 flex-none accent-[#e8b339]"
-        />
-        <span
-          className={`text-[15px] font-semibold ${
-            checked ? 'text-faint line-through' : 'text-ink'
-          }`}
-        >
-          {block.topic}
+      <div className="mt-1.5 flex items-center gap-3 text-[12px]">
+        <span className="inline-flex items-center gap-1.5 text-[#c79cf2]">
+          ⤳ Rescheduled to {block.movedTo ? dayLabel(block.movedTo) : 'another day'}
         </span>
-      </label>
-
-      {/* What to do */}
-      {block.whatToDo && (
-        <p className="mb-2.5 ml-[26px] mt-2 text-[13.5px] text-muted">{block.whatToDo}</p>
-      )}
-
-      {/* Debrief callout (authored static content — may contain <b>) */}
-      {block.debrief && (
-        <div
-          className="debrief-box mb-2.5 ml-[26px] rounded-r-lg border-l-[3px] border-edge bg-panel2 px-3 py-2.5 text-[12.5px] leading-relaxed text-ink"
-          dangerouslySetInnerHTML={{ __html: `<b>Debrief — </b>${block.debrief}` }}
-        />
-      )}
-
-      {/* Video resources */}
-      {block.videos.length > 0 && (
-        <div className="ml-[26px] flex flex-wrap gap-1.5">
-          {block.videos.map((v, j) => (
-            <a
-              key={j}
-              href={v.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-panel2 px-2.5 py-1.5 text-[12px] text-ink transition hover:border-gold hover:bg-[#222a38]"
-            >
-              <span className="text-[13px] text-[#e24b4a]" aria-hidden>
-                ▶
-              </span>
-              {v.label}
-            </a>
-          ))}
-        </div>
-      )}
+        <button
+          type="button"
+          onClick={() => onUndoMove(block.id)}
+          className="text-faint underline-offset-2 hover:text-ink hover:underline"
+        >
+          Undo
+        </button>
+      </div>
     </div>
   )
 }

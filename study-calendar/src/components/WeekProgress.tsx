@@ -1,23 +1,25 @@
 import { useMemo } from 'react'
-import { blockId, PLAN, visibleBlocks } from '../plan'
 import { planWeeks } from '../lib/dates'
+import type { DayResolution } from '../lib/schedule'
 
 interface Props {
-  completed: Set<string>
+  resolution: Map<string, DayResolution>
 }
 
-/** Per-week completion bars driven by the localStorage completion set. */
-export default function WeekProgress({ completed }: Props) {
+/** Per-week completion bars, counted from where tasks currently live. */
+export default function WeekProgress({ resolution }: Props) {
   const weeks = useMemo(() => planWeeks(), [])
 
   const rows = weeks.map((w) => {
     let total = 0
     let done = 0
     for (const iso of w.isoDays) {
-      visibleBlocks(PLAN[iso]).forEach((_, i) => {
+      const res = resolution.get(iso)
+      if (!res) continue
+      for (const r of res.active) {
         total++
-        if (completed.has(blockId(iso, i))) done++
-      })
+        if (r.done) done++
+      }
     }
     return { ...w, total, done, pct: total === 0 ? 0 : Math.round((done / total) * 100) }
   })
@@ -33,7 +35,7 @@ export default function WeekProgress({ completed }: Props) {
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-[13px] font-semibold">Progress</h2>
         <span className="text-[12px] text-muted">
-          {grandDone}/{grandTotal} blocks done
+          {grandDone}/{grandTotal} tasks done
         </span>
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">

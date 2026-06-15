@@ -1,23 +1,41 @@
-// Tiny localStorage wrapper for per-block completion. Values are block ids
-// (see blockId() in plan.ts). Bump the version suffix to reset everyone's data.
-const KEY = 'study-calendar:completed:v1'
+import type { BlockStates } from './schedule'
 
-export function loadCompleted(): Set<string> {
+// Per-block state (done / rescheduled), keyed by origin block id.
+const STATES_KEY = 'study-calendar:blockstate:v1'
+// Old completion-only store (a Set of completed ids) — migrated once if present.
+const LEGACY_COMPLETED_KEY = 'study-calendar:completed:v1'
+
+export function loadStates(): BlockStates {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return new Set()
-    const parsed: unknown = JSON.parse(raw)
-    return new Set(Array.isArray(parsed) ? (parsed as string[]) : [])
+    const raw = localStorage.getItem(STATES_KEY)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as BlockStates
+      }
+      return {}
+    }
+
+    // One-time migration: turn the old completed-id array into done flags.
+    const legacy = localStorage.getItem(LEGACY_COMPLETED_KEY)
+    if (legacy) {
+      const arr: unknown = JSON.parse(legacy)
+      if (Array.isArray(arr)) {
+        const states: BlockStates = {}
+        for (const id of arr) if (typeof id === 'string') states[id] = { done: true }
+        return states
+      }
+    }
+    return {}
   } catch {
-    return new Set()
+    return {}
   }
 }
 
-export function saveCompleted(set: Set<string>): void {
+export function saveStates(states: BlockStates): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify([...set]))
+    localStorage.setItem(STATES_KEY, JSON.stringify(states))
   } catch {
-    // Storage can be unavailable (private mode / quota) — completion is a
-    // nice-to-have, so fail silently rather than break the app.
+    // Storage can be unavailable (private mode / quota) — fail silently.
   }
 }
