@@ -38,6 +38,12 @@ topics, "what to do", exam-focused debriefs, and video links.
 - **Today highlight**, **keyboard support** (Esc closes the modal), click-outside
   to close, smooth modal animation.
 - **Mobile-responsive** — works as a real calendar on a phone.
+- **Full-screen view** — a detail-rich, full-window calendar (theme + task list per
+  day) with a top-right exit button.
+- **Work ahead** — pull a later day's task forward to do it early; it leaves the
+  later day automatically (the reverse of rescheduling).
+- **Extended Essay** is built into the plan as a subject (~3h/week: topic → sources
+  → outline → drafts → RPPF reflections).
 - **Installable PWA** — add it to your phone's home screen or your desktop and use
   it offline; it updates itself on next launch.
 

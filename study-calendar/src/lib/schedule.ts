@@ -141,3 +141,22 @@ export function recommendDays(
       reason: load === 0 ? 'No other tasks' : hasSubject ? 'Same subject' : `${load} task${load > 1 ? 's' : ''}`,
     }))
 }
+
+/**
+ * "Work ahead": not-yet-done tasks scheduled on days AFTER `afterIso`. Pulling
+ * one into an earlier day is just a reschedule to that earlier day.
+ */
+export function upcomingTasks(
+  resolution: Map<string, DayResolution>,
+  afterIso: string,
+): { iso: string; tasks: ResolvedBlock[] }[] {
+  const out: { iso: string; tasks: ResolvedBlock[] }[] = []
+  for (const iso of planDays()) {
+    if (iso <= afterIso) continue // ISO date strings sort chronologically
+    const res = resolution.get(iso)
+    if (!res) continue
+    const tasks = res.active.filter((r) => !r.done)
+    if (tasks.length) out.push({ iso, tasks })
+  }
+  return out
+}
