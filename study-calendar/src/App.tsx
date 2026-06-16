@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SubjectCode } from './plan'
 import { MONTHS } from './lib/dates'
 import { loadStates, saveStates } from './lib/storage'
-import { recommendDays, resolveSchedule } from './lib/schedule'
+import { recommendDays, resolveSchedule, upcomingTasks } from './lib/schedule'
 import type { BlockStates } from './lib/schedule'
 import { useSync } from './lib/useSync'
 import Header from './components/Header'
@@ -11,11 +11,13 @@ import SubjectBar from './components/SubjectBar'
 import WeekProgress from './components/WeekProgress'
 import MonthNav from './components/MonthNav'
 import CalendarGrid from './components/CalendarGrid'
+import FullCalendar from './components/FullCalendar'
 import DayModal from './components/DayModal'
 
 export default function App() {
   const [monthIndex, setMonthIndex] = useState(0)
   const [openIso, setOpenIso] = useState<string | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
   const [states, setStates] = useState<BlockStates>(loadStates)
   const [hidden, setHidden] = useState<Set<SubjectCode>>(() => new Set())
 
@@ -71,6 +73,11 @@ export default function App() {
     [resolution],
   )
 
+  const getUpcoming = useCallback(
+    (afterIso: string) => upcomingTasks(resolution, afterIso),
+    [resolution],
+  )
+
   const toggleSubject = useCallback((code: SubjectCode) => {
     setHidden((prev) => {
       const next = new Set(prev)
@@ -103,6 +110,16 @@ export default function App() {
         onNext={() => setMonthIndex((i) => Math.min(MONTHS.length - 1, i + 1))}
       />
 
+      <div className="mb-2 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setFullscreen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-panel px-2.5 py-1.5 text-[12px] text-muted transition hover:border-gold/60 hover:text-ink"
+        >
+          <span aria-hidden>⤢</span> Full screen
+        </button>
+      </div>
+
       <CalendarGrid
         year={month.year}
         month={month.month}
@@ -119,6 +136,21 @@ export default function App() {
         Sports times in Taiwan time (UTC+8). End date Sat 15 Aug — placeholder.
       </footer>
 
+      {fullscreen && (
+        <FullCalendar
+          year={month.year}
+          month={month.month}
+          resolution={resolution}
+          hidden={hidden}
+          canPrev={monthIndex > 0}
+          canNext={monthIndex < MONTHS.length - 1}
+          onPrev={() => setMonthIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setMonthIndex((i) => Math.min(MONTHS.length - 1, i + 1))}
+          onOpen={setOpenIso}
+          onClose={() => setFullscreen(false)}
+        />
+      )}
+
       {openIso && (
         <DayModal
           iso={openIso}
@@ -127,6 +159,7 @@ export default function App() {
           onReschedule={reschedule}
           onUndoMove={undoMove}
           onRecommend={recommend}
+          onGetUpcoming={getUpcoming}
           onClose={() => setOpenIso(null)}
         />
       )}

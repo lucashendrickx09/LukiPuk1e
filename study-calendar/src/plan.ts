@@ -42,6 +42,7 @@ export type SubjectCode =
   | 'EN' // English Lang & Lit SL
   | 'FR' // French ab initio
   | 'BM' // Business HL
+  | 'EE' // Extended Essay (~3h/week)
   | 'DR' // Driving theory test
   | 'AD' // Review / admin
   | 'RE' // Rest (day-type colour, not used as a block)
@@ -104,6 +105,7 @@ export const SUBJECTS: Record<SubjectCode, SubjectMeta> = {
   EN: { name: 'English Lang & Lit SL', color: '#1d9e75' },
   FR: { name: 'French ab initio', color: '#378add' },
   BM: { name: 'Business HL', color: '#ba7517' },
+  EE: { name: 'Extended Essay', color: '#22c3d6' },
   DR: { name: 'Driving theory test', color: '#5dcaa5' },
   AD: { name: 'Review/admin', color: '#6b7785' },
   RE: { name: 'Rest', color: '#2d8c6b' },
@@ -118,6 +120,7 @@ export const STUDY_SUBJECTS: SubjectCode[] = [
   'EN',
   'FR',
   'BM',
+  'EE',
   'DR',
   'AD',
 ]
@@ -284,6 +287,14 @@ export const PLAN: Plan = {
         [vid('OCT — AD AS model', 'Organic Chemistry Tutor aggregate demand supply')],
         'Afternoon · 75m',
       ),
+      block(
+        'EE',
+        'Extended Essay — topic & research question',
+        'Pick your EE subject and draft a sharp, answerable research question.',
+        '<b>The research question is everything.</b> Narrow and arguable beats broad — get it signed off by your supervisor.',
+        [vid('EE — research question', 'IB extended essay research question how to')],
+        'Weekly · ~3h',
+      ),
     ],
   },
 
@@ -337,6 +348,14 @@ export const PLAN: Plan = {
         "Building the habit until it's automatic. Compare to a model band-7 answer after.",
         [vid('Paper 1 model answer', 'IB English language literature paper 1 guided analysis')],
         'Afternoon · 60m',
+      ),
+      block(
+        'EE',
+        'Extended Essay — reading & sources',
+        'Background reading. Build an annotated bibliography of 8–10 credible sources.',
+        'Log every source now (author, date, page) so citations are painless later.',
+        [vid('EE — sources', 'IB extended essay finding sources annotated bibliography')],
+        'Weekly · ~3h',
       ),
     ],
   },
@@ -478,6 +497,14 @@ export const PLAN: Plan = {
         'Light',
       ),
       block('DR', '50 Qs', '', '', [], 'Light'),
+      block(
+        'EE',
+        'Extended Essay — light reading',
+        'Skim one or two sources and jot quick notes. Keep it gentle this week.',
+        '',
+        [],
+        'Light',
+      ),
     ],
   },
 
@@ -636,6 +663,14 @@ export const PLAN: Plan = {
         [vid('IB Business ratios', 'IB business management ratio analysis')],
         'Afternoon · 60m',
       ),
+      block(
+        'EE',
+        'Extended Essay — refine RQ + outline',
+        'Tighten your research question and outline the essay section by section.',
+        '<b>A clear outline now saves the draft later.</b> Map each section back to your RQ.',
+        [vid('EE — structure', 'IB extended essay structure outline')],
+        'Weekly · ~3h',
+      ),
     ],
   },
 
@@ -735,6 +770,14 @@ export const PLAN: Plan = {
         'Morning · 75m',
       ),
       block('DR', 'Mock #3', '', 'Targeting 90%+.', [], 'Afternoon · 30m'),
+      block(
+        'EE',
+        'Extended Essay — draft the introduction',
+        'Write the introduction and your first body section (~800–1000 words).',
+        'Write badly first, fix later — momentum beats perfection on a first draft.',
+        [],
+        'Weekly · ~3h',
+      ),
     ],
   },
 
@@ -850,6 +893,14 @@ export const PLAN: Plan = {
     blocks: [
       block('MA', 'Calculus + stats review', 'Combined review of your two biggest HL chunks.', '', [], 'Morning · 80m'),
       block('FR', 'Timed writing', '', ' ', [], 'Afternoon · 45m'),
+      block(
+        'EE',
+        'Extended Essay — draft the analysis',
+        'Draft the main body / analysis sections, leaning on your sources.',
+        'Quote, then analyse — every source should earn its place against the RQ.',
+        [],
+        'Weekly · ~3h',
+      ),
     ],
   },
 
@@ -905,6 +956,14 @@ export const PLAN: Plan = {
     blocks: [
       block('BM', 'Full past paper', '', ' ', [], 'Morning · 75m'),
       block('FR', 'Final text-type sweep', 'All the text types, one last cycle.', '', [], 'Afternoon · 45m'),
+      block(
+        'EE',
+        'Extended Essay — full first draft',
+        'Draft the remaining sections + conclusion. Assemble a complete first draft.',
+        '<b>A complete rough draft is the milestone.</b> You can only edit something that exists.',
+        [],
+        'Weekly · ~3h',
+      ),
     ],
   },
 
@@ -960,6 +1019,14 @@ export const PLAN: Plan = {
         '',
         [],
         'Light',
+      ),
+      block(
+        'EE',
+        'Extended Essay — review draft + reflections',
+        'Read your draft critically and write the three RPPF reflections.',
+        '<b>The RPPF reflections are assessed</b> — do them before the end of term, not after.',
+        [],
+        'Review',
       ),
     ],
   },
