@@ -54,9 +54,12 @@ export default function FullCalendar({
 
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto bg-base animate-[scrim-in_0.15s_ease]">
-      <div className="mx-auto max-w-[1400px] px-3 pb-10 pt-3 sm:px-5">
-        {/* Header: month nav + exit */}
-        <div className="sticky top-0 z-10 mb-3 flex items-center justify-between gap-3 bg-base/95 py-2 backdrop-blur">
+      <div className="mx-auto max-w-[1400px] px-3 pb-10 sm:px-5" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
+        {/* Header: month nav + exit. Sticks below the safe-area (notch / status bar). */}
+        <div
+          className="sticky z-10 mb-3 flex items-center justify-between gap-3 bg-base/95 py-2.5 backdrop-blur"
+          style={{ top: 'env(safe-area-inset-top)' }}
+        >
           <div className="flex items-center gap-2">
             <button type="button" onClick={onPrev} disabled={!canPrev} aria-label="Previous month" className={navBtn}>
               ‹
@@ -72,10 +75,10 @@ export default function FullCalendar({
             type="button"
             onClick={onClose}
             aria-label="Exit full screen"
-            className="flex h-9 items-center gap-1.5 rounded-lg border border-edge bg-panel px-3 text-[13px] text-muted transition hover:border-gold/60 hover:text-ink"
+            className="flex h-11 flex-none items-center gap-2 rounded-xl border border-edge bg-panel px-4 text-[15px] font-medium text-ink transition hover:border-gold/70 hover:text-gold"
           >
-            <span className="text-base leading-none">✕</span>
-            <span className="hidden sm:inline">Exit</span>
+            <span className="text-lg leading-none">✕</span>
+            <span>Exit</span>
           </button>
         </div>
 
