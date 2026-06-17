@@ -12,6 +12,7 @@ import {
 import { THESIS_MODELS } from '@/api/anthropic';
 import { Card, SectionTitle } from '@/components/ui';
 import { KEYS, setSecret } from '@/lib/secure';
+import { notificationPermission, requestNotificationPermission } from '@/lib/deviceNotify';
 import { useCatalog } from '@/store/catalog';
 import { useDeck } from '@/store/deck';
 import { usePortfolio } from '@/store/portfolio';
@@ -106,6 +107,7 @@ function KeyField({
 
 export default function SettingsScreen() {
   const settings = useSettings();
+  const [perm, setPerm] = useState(notificationPermission());
   const clearDeck = useDeck((s) => s.clearDeck);
   const resetPersonalization = useCatalog((s) => s.resetPersonalization);
   const clearCatalog = useCatalog((s) => s.clearAll);
@@ -185,11 +187,32 @@ export default function SettingsScreen() {
 
       <SectionTitle>Notifications</SectionTitle>
       <Card>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={{ color: colors.text, fontSize: 14 }}>Device notifications</Text>
+            <Text style={styles.note}>
+              {perm === 'granted'
+                ? 'Enabled — alerts pop up on this device while the app is open.'
+                : perm === 'unsupported'
+                  ? 'Add the app to your home screen to allow device alerts (or use a native build).'
+                  : 'Allow pop-up alerts for the items below.'}
+            </Text>
+          </View>
+          {perm !== 'granted' && perm !== 'unsupported' ? (
+            <TouchableOpacity
+              style={styles.enableBtn}
+              onPress={async () => setPerm(await requestNotificationPermission())}>
+              <Text style={{ color: '#08111E', fontWeight: '800' }}>Enable</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         {(
           [
-            ['Daily deck ready', 'notifyDeckReady'],
-            ['Portfolio moves & news', 'notifyPortfolio'],
-            ['Catalog updates', 'notifyCatalog'],
+            ['Daily feed ready', 'notifyDeckReady'],
+            ['Morning performance debrief', 'notifyPortfolio'],
+            ['Market recap', 'notifyMarket'],
+            ['Catalog stock alerts', 'notifyCatalog'],
           ] as const
         ).map(([label, key]) => (
           <View key={key} style={styles.switchRow}>
@@ -203,7 +226,9 @@ export default function SettingsScreen() {
           </View>
         ))}
         <Text style={styles.note}>
-          Preferences are stored now; push delivery arrives with the v0.2 backend.
+          These build your in-app Alerts (the bell, top-right) and pop up as device notifications
+          while the app is open. Alerts that fire while the app is fully closed, plus home-screen
+          widgets, require the native app build.
         </Text>
       </Card>
 
@@ -283,6 +308,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
+  },
+  enableBtn: {
+    backgroundColor: colors.blue,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    justifyContent: 'center',
   },
   row: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   rowTxt: { color: colors.text, fontSize: 14, fontWeight: '600' },

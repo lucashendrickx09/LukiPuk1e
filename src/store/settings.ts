@@ -13,6 +13,7 @@ interface SettingsState {
   notifyDeckReady: boolean;
   notifyPortfolio: boolean;
   notifyCatalog: boolean;
+  notifyMarket: boolean;
   // Key presence is mirrored here so UI can react; key material lives in
   // SecureStore (see lib/secure.ts), never in this persisted store.
   hasFinnhubKey: boolean;
@@ -30,6 +31,7 @@ export const useSettings = create<SettingsState>()(
       notifyDeckReady: true,
       notifyPortfolio: true,
       notifyCatalog: true,
+      notifyMarket: true,
       hasFinnhubKey: false,
       hasAnthropicKey: false,
       set: (partial) => set(partial),

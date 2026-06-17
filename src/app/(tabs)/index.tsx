@@ -16,6 +16,7 @@ import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
 import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
+import { useNotifications } from '@/store/notifications';
 import { usePortfolio } from '@/store/portfolio';
 import { useSettings } from '@/store/settings';
 import { colors, plColor, spacing } from '@/theme';
@@ -50,6 +51,14 @@ export default function PortfolioScreen() {
       const id = setInterval(() => refreshQuotes(symbols), POLL_MS);
       return () => clearInterval(id);
     }, [symbols]),
+  );
+
+  // Generate today's notifications (morning debrief, market recap, catalog
+  // moves) when the home screen comes into focus.
+  useFocusEffect(
+    useCallback(() => {
+      useNotifications.getState().scan();
+    }, []),
   );
 
   // Daily history for sparklines + the portfolio value line (cached per day).

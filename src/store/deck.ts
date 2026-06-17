@@ -9,6 +9,7 @@ import { DEMO_DECK } from '@/data/demo';
 import { useSettings } from './settings';
 import { usePortfolio } from './portfolio';
 import { useCatalog } from './catalog';
+import { useNotifications } from './notifications';
 
 interface DeckState {
   cards: DeckCard[];
@@ -21,6 +22,17 @@ interface DeckState {
 }
 
 const IDLE: BuildProgress = { phase: 'idle', done: 0, total: 0, message: '' };
+
+function notifyDeckReady(count: number) {
+  if (count <= 0) return;
+  useNotifications.getState().push({
+    key: `deck-${todayKey()}`,
+    type: 'deck',
+    severity: 'normal',
+    title: 'Your daily feed is ready',
+    body: `${count} analysed ${count === 1 ? 'company is' : 'companies are'} waiting in Discover.`,
+  });
+}
 
 export const useDeck = create<DeckState>()(
   persist(
@@ -37,6 +49,7 @@ export const useDeck = create<DeckState>()(
           (c) => !cooldownActive(c.symbol) && !catalogSymbols().includes(c.symbol),
         );
         set({ cards, builtDay: todayKey(), progress: IDLE });
+        notifyDeckReady(cards.length);
       },
 
       clearDeck: () => set({ cards: [], builtDay: null, progress: IDLE }),
@@ -85,6 +98,7 @@ export const useDeck = create<DeckState>()(
             onProgress,
           );
           set({ cards, builtDay: todayKey(), progress: IDLE });
+          notifyDeckReady(cards.length);
         } catch (e) {
           set({
             progress: {

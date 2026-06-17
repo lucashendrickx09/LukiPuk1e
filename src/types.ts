@@ -109,3 +109,21 @@ export interface BuildProgress {
   total: number;
   message: string;
 }
+
+export type NotificationSeverity = 'normal' | 'important' | 'urgent';
+export type NotificationType = 'debrief' | 'market' | 'deck' | 'catalog';
+
+export interface NotificationDraft {
+  key: string; // dedupe key (usually includes the day) — one per key
+  type: NotificationType;
+  severity: NotificationSeverity;
+  title: string;
+  body: string;
+  symbols?: string[];
+}
+
+export interface NotificationItem extends NotificationDraft {
+  id: string;
+  createdAt: string;
+  read: boolean;
+}

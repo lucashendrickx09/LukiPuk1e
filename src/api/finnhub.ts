@@ -110,6 +110,11 @@ export async function fetchCompanyNews(
   return Array.isArray(rows) ? rows : [];
 }
 
+export async function fetchMarketNews(key: string): Promise<NewsItem[]> {
+  const rows = await get<NewsItem[]>(key, '/news', { category: 'general' });
+  return Array.isArray(rows) ? rows : [];
+}
+
 export async function fetchMetrics(key: string, symbol: string): Promise<KeyMetrics> {
   try {
     const m = await get<{ metric?: Record<string, number | null> }>(key, '/stock/metric', {

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { ColorValue, StyleSheet } from 'react-native';
+import { AlertsBell } from '@/components/AlertsBell';
 import { colors } from '@/theme';
 
 // Tab icons swap between filled (focused) and outline (unfocused) — the iOS
@@ -26,6 +27,7 @@ export default function TabsLayout() {
         headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 22 },
         headerShadowVisible: false,
         headerTitleAlign: 'left',
+        headerRight: () => <AlertsBell />,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
