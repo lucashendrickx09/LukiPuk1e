@@ -7,6 +7,8 @@ node_modules/
 .expo/
 dist/
 web-build/
+stockpile-web/
+_site/
 expo-env.d.ts
 
 # Native

@@ -1,0 +1,85 @@
+# Builds BOTH apps in this repo and publishes them to one GitHub Pages site:
+#   • Stockpile (Expo web)      -> site root   https://<user>.github.io/<repo>/
+#   • study-calendar (Vite PWA) -> /calendar   https://<user>.github.io/<repo>/calendar/
+#
+# Stockpile is at the root and study-calendar at a subpath so study-calendar's
+# service worker scopes to /calendar/ and can't intercept Stockpile's routes.
+#
+# Requirements (already satisfied for this repo):
+#   • Settings → Pages → Source: "GitHub Actions"
+#   • This workflow + both apps live on the repo's DEFAULT branch.
+
+name: Deploy apps to Pages
+
+on:
+  push:
+    branches:
+      - claude/charming-mccarthy-ho8nq4
+      - claude/determined-franklin-q9ibdz
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 1) Stockpile (Expo web) -> site root.
+      #    Built BEFORE study-calendar's install so Metro never crawls
+      #    study-calendar/node_modules (avoids haste-map collisions).
+      #    STOCKPILE_BASE_URL makes absolute asset/route paths resolve under the
+      #    GitHub project-page path. Update it if the repo is renamed.
+      - name: Install Stockpile deps
+        run: npm ci
+      - name: Build Stockpile (web)
+        run: npx expo export --platform web --output-dir stockpile-web
+        env:
+          STOCKPILE_BASE_URL: /LukiPuk1e
+
+      # 2) study-calendar (Vite, relative base) -> /calendar
+      - name: Install study-calendar deps
+        working-directory: study-calendar
+        run: npm ci
+      - name: Build study-calendar
+        working-directory: study-calendar
+        run: npm run build
+        env:
+          # Public, safe-to-ship values. Unset -> app builds in local-only mode.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+
+      # 3) Assemble one site: Stockpile at root, study-calendar under /calendar
+      - name: Assemble site
+        run: |
+          rm -rf _site
+          mkdir -p _site/calendar
+          cp -r stockpile-web/. _site/
+          cp -r study-calendar/dist/. _site/calendar/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
