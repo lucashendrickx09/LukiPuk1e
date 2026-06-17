@@ -1,0 +1,19 @@
+{
+  "name": "Stockpile",
+  "short_name": "Stockpile",
+  "description": "Your personal investing companion — portfolio, analyzed picks, and a swipe deck.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0F14",
+  "theme_color": "#0B0F14",
+  "icons": [
+    {
+      "src": "app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
