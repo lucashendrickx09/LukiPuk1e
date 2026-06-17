@@ -48,6 +48,10 @@ export default function RootLayout() {
           name="add-position"
           options={{ presentation: 'modal', title: 'Add position' }}
         />
+        <Stack.Screen
+          name="import-portfolio"
+          options={{ presentation: 'modal', title: 'Import portfolio' }}
+        />
       </Stack>
     </ThemeProvider>
   );

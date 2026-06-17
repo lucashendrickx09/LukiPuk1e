@@ -138,10 +138,13 @@ export default function PortfolioScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, flexGrow: 1, justifyContent: 'center' }}>
         <EmptyState
           title="No positions yet"
-          body="Track what you own: add each position manually, or load the sample portfolio to explore the app."
+          body="Track what you own: import a portfolio from a spreadsheet, add positions manually, or load the sample to explore."
         />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/add-position')}>
-          <Text style={styles.primaryBtnTxt}>Add a position</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push('/import-portfolio')}>
+          <Text style={styles.primaryBtnTxt}>Import portfolio</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push('/add-position')}>
+          <Text style={styles.secondaryBtnTxt}>Add a position manually</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} onPress={loadSample}>
           <Text style={styles.secondaryBtnTxt}>Load sample portfolio</Text>
@@ -198,9 +201,14 @@ export default function PortfolioScreen() {
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <SectionTitle>Holdings</SectionTitle>
-        <TouchableOpacity onPress={() => router.push('/add-position')}>
-          <Text style={{ color: colors.blue, fontWeight: '700' }}>+ Add</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+          <TouchableOpacity onPress={() => router.push('/import-portfolio')}>
+            <Text style={{ color: colors.blue, fontWeight: '700' }}>Import</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/add-position')}>
+            <Text style={{ color: colors.blue, fontWeight: '700' }}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {positions.map((p) => {
         const price = priceOf(p);

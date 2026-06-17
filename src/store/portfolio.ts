@@ -7,6 +7,7 @@ import { DEMO_POSITIONS } from '@/data/demo';
 interface PortfolioState {
   positions: Position[];
   addPosition: (p: Omit<Position, 'id'>) => void;
+  importPositions: (list: Omit<Position, 'id'>[], replace: boolean) => void;
   removePosition: (id: string) => void;
   loadSamplePortfolio: () => void;
   clearAll: () => void;
@@ -20,6 +21,11 @@ export const usePortfolio = create<PortfolioState>()(
         set((s) => ({
           positions: [...s.positions, { ...p, id: `${p.symbol}-${Date.now()}` }],
         })),
+      importPositions: (list, replace) =>
+        set((s) => {
+          const mapped = list.map((p, i) => ({ ...p, id: `${p.symbol}-${Date.now()}-${i}` }));
+          return { positions: replace ? mapped : [...s.positions, ...mapped] };
+        }),
       removePosition: (id) =>
         set((s) => ({ positions: s.positions.filter((p) => p.id !== id) })),
       loadSamplePortfolio: () =>

@@ -98,6 +98,10 @@ src/components/ swipe deck (core Animated, no native deps) + hand-rolled SVG cha
 ### 1. Portfolio
 Tracks every position the user entered manually (ticker, shares, buy price, buy date).
 
+- **Import** from a spreadsheet/broker table — paste a table or point it at a
+  published Google Sheet. Uses the same flexible column format as the Momentum
+  app (ticker/symbol, shares/quantity, cost/cost-basis, name), with a live
+  preview before importing and a replace-or-append choice.
 - Header: total value, total P/L ($ and %), day change.
 - **Suggestions** — cross-references holdings against the catalog: flags
   underperformers to review, sector concentration, strong catalog picks you
