@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { CatalogEntry, DeckCard, SwipeRecord } from '@/types';
+import { useFolders } from './folders';
 
 // Swipe history + the catalog of right-swiped companies.
 // Left swipe -> 21-day cooldown before the symbol can reappear in a deck.
@@ -43,8 +44,12 @@ export const useCatalog = create<CatalogState>()(
         }));
       },
 
-      removeFromCatalog: (symbol) =>
-        set((s) => ({ entries: s.entries.filter((e) => e.card.symbol !== symbol) })),
+      removeFromCatalog: (symbol) => {
+        // Keep folders consistent — a stock can't sit in a folder once it's
+        // out of the catalog.
+        useFolders.getState().pruneSymbol(symbol);
+        set((s) => ({ entries: s.entries.filter((e) => e.card.symbol !== symbol) }));
+      },
 
       catalogSymbols: () => get().entries.map((e) => e.card.symbol),
 

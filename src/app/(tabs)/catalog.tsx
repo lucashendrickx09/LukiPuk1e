@@ -8,8 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { NameInputModal } from '@/components/NameInputModal';
 import { Card, Chip, EmptyState, Logo, PctText, ScoreBar } from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
+import { useFolders } from '@/store/folders';
 import { useMarket } from '@/store/market';
 import { colors, radius, spacing } from '@/theme';
 import { CatalogEntry } from '@/types';
@@ -19,7 +21,12 @@ export default function CatalogScreen() {
   const entries = useCatalog((s) => s.entries);
   const removeFromCatalog = useCatalog((s) => s.removeFromCatalog);
   const quotes = useMarket((s) => s.quotes);
+  const folders = useFolders((s) => s.folders);
+  const toggleSymbol = useFolders((s) => s.toggleSymbol);
+  const createFolder = useFolders((s) => s.createFolder);
+  const addSymbol = useFolders((s) => s.addSymbol);
   const [peek, setPeek] = useState<CatalogEntry | null>(null);
+  const [folderModalFor, setFolderModalFor] = useState<string | null>(null);
 
   const symbols = useMemo(() => entries.map((e) => e.card.symbol), [entries]);
 
@@ -97,6 +104,30 @@ export default function CatalogScreen() {
               <Text style={styles.peekBlurb}>{peek.card.thesis.blurb}</Text>
               <ScoreBar label="Long-term score" value={peek.card.longTermScore} color={colors.blue} />
               <ScoreBar label="Momentum score" value={peek.card.momentumScore} color={colors.purple} />
+
+              <Text style={styles.folderLabel}>Folders</Text>
+              <View style={styles.folderRow}>
+                {folders.map((f) => {
+                  const inFolder = f.symbols.includes(peek.card.symbol);
+                  return (
+                    <TouchableOpacity
+                      key={f.id}
+                      onPress={() => toggleSymbol(f.id, peek.card.symbol)}
+                      style={[styles.folderPill, inFolder && styles.folderPillActive]}>
+                      <Text style={[styles.folderPillTxt, inFolder && styles.folderPillTxtActive]}>
+                        {inFolder ? '✓ ' : ''}
+                        {f.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.folderPillNew}
+                  onPress={() => setFolderModalFor(peek.card.symbol)}>
+                  <Text style={styles.folderPillNewTxt}>+ New</Text>
+                </TouchableOpacity>
+              </View>
+
               <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
                 <TouchableOpacity
                   style={[styles.peekBtn, { backgroundColor: colors.blue }]}
@@ -119,6 +150,20 @@ export default function CatalogScreen() {
           ) : null}
         </TouchableOpacity>
       </Modal>
+
+      <NameInputModal
+        visible={folderModalFor !== null}
+        title="New folder"
+        placeholder="Folder name"
+        submitLabel="Create & add"
+        onSubmit={(name) => {
+          if (folderModalFor) {
+            const id = createFolder(name);
+            addSymbol(id, folderModalFor);
+          }
+        }}
+        onClose={() => setFolderModalFor(null)}
+      />
     </ScrollView>
   );
 }
@@ -146,4 +191,33 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     alignItems: 'center',
   },
+  folderLabel: {
+    color: colors.faint,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  folderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  folderPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  folderPillActive: { borderColor: colors.blue, backgroundColor: colors.blue + '22' },
+  folderPillTxt: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+  folderPillTxtActive: { color: colors.blue },
+  folderPillNew: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.faint,
+  },
+  folderPillNewTxt: { color: colors.muted, fontSize: 13, fontWeight: '600' },
 });

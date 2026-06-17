@@ -40,6 +40,7 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="company/[symbol]" options={{ title: 'Company' }} />
+        <Stack.Screen name="folder/[id]" options={{ title: 'Folder' }} />
         <Stack.Screen
           name="add-position"
           options={{ presentation: 'modal', title: 'Add position' }}

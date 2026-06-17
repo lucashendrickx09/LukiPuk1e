@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { fetchDailyCandles } from '@/api/stooq';
 import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/charts';
-import { Card, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
+import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
+import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
+import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
 import { usePortfolio } from '@/store/portfolio';
 import { useSettings } from '@/store/settings';
@@ -21,6 +23,9 @@ import { Candle, Position } from '@/types';
 import { fmtMoney, fmtPct } from '@/utils/format';
 
 const POLL_MS = 3 * 60 * 1000;
+
+const sevColor = (s: Recommendation['severity']) =>
+  s === 'high' ? colors.red : s === 'medium' ? colors.gold : colors.blue;
 
 export default function PortfolioScreen() {
   const { width } = useWindowDimensions();
@@ -72,6 +77,13 @@ export default function PortfolioScreen() {
 
   const sectorOf = (symbol: string) =>
     profiles[symbol]?.sector ?? UNIVERSE_BY_SYMBOL.get(symbol)?.fallbackSector ?? 'Other';
+
+  const catalogEntries = useCatalog((s) => s.entries);
+  const recs = useMemo(
+    () => buildRecommendations({ positions, priceOf, sectorOf, catalog: catalogEntries }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [positions, quotes, profiles, catalogEntries],
+  );
 
   const sectorSlices = useMemo(() => {
     const bySector = new Map<string, number>();
@@ -153,6 +165,29 @@ export default function PortfolioScreen() {
         </View>
         {lastError ? <Text style={styles.error}>{lastError}</Text> : null}
       </Card>
+
+      {recs.length > 0 ? (
+        <>
+          <SectionTitle>Suggestions</SectionTitle>
+          {recs.map((r) => (
+            <TouchableOpacity
+              key={r.id}
+              disabled={r.symbols.length === 0}
+              onPress={() => r.symbols[0] && router.push(`/company/${r.symbols[0]}`)}>
+              <Card style={{ marginBottom: spacing.sm, borderLeftWidth: 3, borderLeftColor: sevColor(r.severity) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                  <Chip label={recKindLabel(r.kind)} color={sevColor(r.severity)} />
+                  <Text style={styles.recTitle}>{r.title}</Text>
+                </View>
+                <Text style={styles.recDetail}>{r.detail}</Text>
+              </Card>
+            </TouchableOpacity>
+          ))}
+          <Text style={styles.recNote}>
+            Educational suggestions from your holdings + catalog — not financial advice.
+          </Text>
+        </>
+      ) : null}
 
       {valueSeries.length > 1 ? (
         <Card>
@@ -236,6 +271,9 @@ const styles = StyleSheet.create({
   totalLabel: { color: colors.muted, fontSize: 13 },
   totalValue: { color: colors.text, fontSize: 34, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
   cardTitle: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
+  recTitle: { color: colors.text, fontSize: 14, fontWeight: '700', flex: 1 },
+  recDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  recNote: { color: colors.faint, fontSize: 11, marginBottom: spacing.md },
   error: { color: colors.red, fontSize: 12, marginTop: 8 },
   primaryBtn: {
     backgroundColor: colors.blue,

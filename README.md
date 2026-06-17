@@ -5,25 +5,46 @@ filings, and newsletter/social chatter, processes it into explained stock theses
 and serves them as a daily Tinder-style swipe deck — alongside a personal
 portfolio tracker.
 
-**Status:** v0.1 thin slice shipped (2026-06-12) — all four screens working
-end-to-end. See *Running the app* below.
+**Status:** v0.1 shipped (2026-06-12), extended 2026-06-17 with portfolio
+**Suggestions** and **Folders** (a fifth tab). See *Running the app* below.
 
 ---
 
 ## Running the app
 
-Prerequisites: Node 20+, and the **Expo Go** app on your phone (App Store / Play Store).
+You can't run a React Native app straight off a GitHub page like a website — it
+has to be bundled and run in a mobile runtime. Two real paths:
+
+### Option A — install it on your phone from GitHub (no dev setup), via EAS
+
+This builds a real installable app in Expo's cloud from this repo.
+
+1. Create a free account at [expo.dev](https://expo.dev).
+2. Install the CLI: `npm install -g eas-cli`, then `eas login`.
+3. From the repo root: `eas init` (links it to your Expo account and writes the
+   project id), then `eas build -p android --profile preview`.
+4. Expo builds in the cloud (~10–15 min) and gives you a link to an **APK** —
+   open it on an Android phone to install. (`eas.json` ships a `preview` profile
+   that produces an APK.)
+5. iOS has no sideloadable equivalent: use Option B with Expo Go, or
+   `eas build -p ios` + TestFlight (needs a paid Apple Developer account).
+
+> Prefer no local CLI at all? In the Expo dashboard you can connect this GitHub
+> repo and trigger the same build from the web.
+
+### Option B — run it locally with Expo (dev mode)
+
+Prerequisites: Node 20+, and **Expo Go** on your phone (App Store / Play Store).
 
 ```bash
 npm install
-npx expo start
+npx expo start        # add --tunnel if phone and computer aren't on one network
 ```
 
-Scan the QR code with Expo Go (Android) or the Camera app (iOS). The app starts
-in **demo mode** — every screen works with illustrative data so you can explore
-immediately.
+Scan the QR with Expo Go (Android) or the Camera app (iOS).
 
-To go live, add keys in **Settings**:
+Either way, the app starts in **demo mode** — every screen works with
+illustrative data. To go live, add keys in **Settings**:
 
 1. **Finnhub** (free): sign up at [finnhub.io](https://finnhub.io) → copy your
    API key. Unlocks live quotes, analyst trends, news, profiles — and real deck
@@ -38,13 +59,13 @@ Keys are stored in the device keychain and sent only to Finnhub/Anthropic.
 ### Code map
 
 ```
-src/app/        screens (expo-router): (tabs)/ portfolio·discover·catalog·settings,
-                company/[symbol] detail, add-position modal
-src/engine/     the analysis pipeline: signals → consensus gate → scoring →
-                personalization → thesis writing (pure TS, lifts to a server in v0.2)
+src/app/        screens (expo-router): (tabs)/ portfolio·discover·catalog·folders·settings,
+                company/[symbol] detail, folder/[id] detail, add-position modal
+src/engine/     analysis pipeline (signals → gate → scoring → personalization →
+                thesis) + recommend (portfolio suggestions). Pure TS, lifts to a server in v0.2
 src/api/        finnhub · stooq (price history) · EDGAR (filings) · anthropic
 src/store/      zustand stores persisted to AsyncStorage (portfolio, deck, catalog,
-                settings, market cache)
+                folders, settings, market cache)
 src/components/ swipe deck (core Animated, no native deps) + hand-rolled SVG charts
 ```
 
@@ -72,12 +93,16 @@ src/components/ swipe deck (core Animated, no native deps) + hand-rolled SVG cha
 
 ---
 
-## The four screens
+## The screens
 
 ### 1. Portfolio
 Tracks every position the user entered manually (ticker, shares, buy price, buy date).
 
 - Header: total value, total P/L ($ and %), day change.
+- **Suggestions** — cross-references holdings against the catalog: flags
+  underperformers to review, sector concentration, strong catalog picks you
+  don't own, and possible rotations (worst holding → best cross-sector pick).
+  Educational only, not advice; each suggestion deep-links to the company.
 - Holdings list: per-position price, P/L, day move, sparkline.
 - Visual breakdowns: allocation by **industry/sector**, by **market-cap size**
   (mega/large/mid/small), by **profit percentage** (winners vs losers), and
@@ -117,8 +142,19 @@ Everything swiped right, persisted as a research shortlist.
   - Source receipts: links to the actual articles/filings/ratings behind the thesis.
 - Catalogued stocks are monitored: major news/earnings/thesis-changing events
   trigger a push notification.
+- **Long-press → Folders**: assign the stock to any number of folders, or spin
+  up a new folder inline.
 
-### 4. Settings & utility
+### 4. Folders
+Organize catalogued stocks into named groups (e.g. "AI", "Dividends", "Watch
+closely").
+
+- List of folders, each previewing its holdings; **tap** opens the folder, with
+  live prices per stock and tap-through to the full company analysis.
+- Create / rename / delete folders; remove a stock with a long-press. Removing a
+  stock from the catalog automatically prunes it from every folder.
+
+### 5. Settings & utility
 - Deck tuning: strictness (1/2/3+ sources), cards per day, style filter
   (long-term vs momentum lean), reset personalization.
 - Notification toggles (deck ready / portfolio alerts / catalog alerts) and
