@@ -9,16 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { fetchMetrics } from '@/api/finnhub';
-import { fetchDailyCandles } from '@/api/stooq';
 import { Card, EmptyState, SectionTitle } from '@/components/ui';
-import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
-import { AnalyticsResult, computeAnalytics } from '@/engine/analytics';
-import { getSecret, KEYS } from '@/lib/secure';
-import { useMarket } from '@/store/market';
+import { useAnalytics } from '@/store/analytics';
 import { usePortfolio } from '@/store/portfolio';
 import { colors, spacing } from '@/theme';
-import { Candle, KeyMetrics } from '@/types';
 import { fmtPct } from '@/utils/format';
 
 // Plain-English explanation for each metric (shown in the tap-through sheet).
@@ -59,64 +53,14 @@ function ratio(n: number): string {
 
 export default function AnalyticsScreen() {
   const positions = usePortfolio((s) => s.positions);
-  const profiles = useMarket((s) => s.profiles);
-  const [result, setResult] = useState<AnalyticsResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('Crunching the numbers…');
+  const result = useAnalytics((s) => s.result);
+  const computing = useAnalytics((s) => s.computing);
+  const status = useAnalytics((s) => s.status);
   const [sheet, setSheet] = useState<{ title: string; value: string; body: string } | null>(null);
 
+  // Shows the cached result instantly; refreshes in the background if stale.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const syms = [...new Set(positions.map((p) => p.symbol))];
-      if (syms.length === 0) {
-        setLoading(false);
-        return;
-      }
-      await useMarket.getState().refreshQuotes(syms);
-      const key = await getSecret(KEYS.finnhub);
-      const metricsBySymbol: Record<string, KeyMetrics> = {};
-      if (key) {
-        for (const sym of syms) {
-          if (cancelled) return;
-          setStatus(`Fundamentals · ${sym}`);
-          try {
-            metricsBySymbol[sym] = await fetchMetrics(key, sym);
-          } catch {
-            // skip
-          }
-        }
-      }
-      const candlesBySymbol: Record<string, Candle[]> = {};
-      for (const sym of syms) {
-        if (cancelled) return;
-        setStatus(`Price history · ${sym}`);
-        const c = await fetchDailyCandles(sym);
-        if (c) candlesBySymbol[sym] = c;
-      }
-      setStatus('Benchmark · SPY');
-      const benchmark = await fetchDailyCandles('SPY');
-      if (cancelled) return;
-      const sectorOf = (sym: string) =>
-        profiles[sym]?.sector ?? UNIVERSE_BY_SYMBOL.get(sym)?.fallbackSector ?? 'Other';
-      const res = computeAnalytics({
-        positions,
-        quotes: useMarket.getState().quotes,
-        metricsBySymbol,
-        sectorOf,
-        candlesBySymbol,
-        benchmark,
-      });
-      if (!cancelled) {
-        setResult(res);
-        setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useAnalytics.getState().compute();
   }, []);
 
   const Row = ({
@@ -161,13 +105,13 @@ export default function AnalyticsScreen() {
     );
   }
 
-  if (loading || !result) {
+  if (!result) {
     return (
       <>
         <Stack.Screen options={{ title: 'Analytics' }} />
         <View style={styles.center}>
           <ActivityIndicator color={colors.blue} />
-          <Text style={styles.status}>{status}</Text>
+          <Text style={styles.status}>{status || 'Crunching the numbers…'}</Text>
           <Text style={styles.statusSub}>
             Pulling fundamentals and price history for each holding (free-tier rate limits make this
             take a moment).
@@ -184,6 +128,7 @@ export default function AnalyticsScreen() {
       <Stack.Screen options={{ title: 'Analytics' }} />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 56 }}>
         <Text style={styles.intro}>Tap any metric for what it means and how to read your number.</Text>
+        {computing ? <Text style={styles.updating}>Updating with the latest data…</Text> : null}
 
         <SectionTitle>Risk-adjusted return</SectionTitle>
         <Card>
@@ -316,6 +261,7 @@ const styles = StyleSheet.create({
   status: { color: colors.text, fontSize: 14, fontWeight: '600' },
   statusSub: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
   intro: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
+  updating: { color: colors.blue, fontSize: 12, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',

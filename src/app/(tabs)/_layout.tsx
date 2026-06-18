@@ -29,7 +29,10 @@ export default function TabsLayout() {
         headerTitleAlign: 'left',
         headerRight: () => <AlertsBell />,
         tabBarStyle: {
-          backgroundColor: colors.surface,
+          // Match the app background so the home-indicator safe-area inset
+          // doesn't read as a separate surface-coloured bar on devices with a
+          // home indicator (e.g. iPhone 14 Pro Max).
+          backgroundColor: colors.bg,
           borderTopColor: colors.border,
           borderTopWidth: StyleSheet.hairlineWidth,
         },

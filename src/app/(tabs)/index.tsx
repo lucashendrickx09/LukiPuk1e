@@ -14,6 +14,7 @@ import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/cha
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
+import { useAnalytics } from '@/store/analytics';
 import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
 import { useNotifications } from '@/store/notifications';
@@ -53,11 +54,12 @@ export default function PortfolioScreen() {
     }, [symbols]),
   );
 
-  // Generate today's notifications (morning debrief, market recap, catalog
-  // moves) when the home screen comes into focus.
+  // On focus: generate today's notifications and pre-warm analytics in the
+  // background so the Analytics screen opens instantly (both are staleness-throttled).
   useFocusEffect(
     useCallback(() => {
       useNotifications.getState().scan();
+      useAnalytics.getState().compute();
     }, []),
   );
 
