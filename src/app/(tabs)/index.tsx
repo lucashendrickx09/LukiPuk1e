@@ -178,6 +178,18 @@ export default function PortfolioScreen() {
         {lastError ? <Text style={styles.error}>{lastError}</Text> : null}
       </Card>
 
+      <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.7}>
+        <Card style={styles.analyticsRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.analyticsTitle}>Portfolio analytics</Text>
+            <Text style={styles.analyticsSub}>
+              Sharpe, Sortino, Beta, Alpha, drawdown, diversification & more
+            </Text>
+          </View>
+          <Text style={styles.analyticsArrow}>→</Text>
+        </Card>
+      </TouchableOpacity>
+
       {recs.length > 0 ? (
         <>
           <SectionTitle>Suggestions</SectionTitle>
@@ -202,10 +214,15 @@ export default function PortfolioScreen() {
       ) : null}
 
       {valueSeries.length > 1 ? (
-        <Card>
-          <Text style={styles.cardTitle}>Value · last 3 months</Text>
-          <LineChart values={valueSeries} width={width - spacing.lg * 4} height={150} />
-        </Card>
+        <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.8}>
+          <Card>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.cardTitle}>Value · last 3 months</Text>
+              <Text style={styles.tapHint}>Analytics →</Text>
+            </View>
+            <LineChart values={valueSeries} width={width - spacing.lg * 4} height={150} />
+          </Card>
+        </TouchableOpacity>
       ) : null}
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -256,20 +273,24 @@ export default function PortfolioScreen() {
       })}
 
       <SectionTitle>Allocation by industry</SectionTitle>
-      <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-          <Donut slices={sectorSlices} />
-          <DonutLegend slices={sectorSlices} />
-        </View>
-      </Card>
+      <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.8}>
+        <Card>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <Donut slices={sectorSlices} />
+            <DonutLegend slices={sectorSlices} />
+          </View>
+        </Card>
+      </TouchableOpacity>
 
       <SectionTitle>Allocation by holding</SectionTitle>
-      <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-          <Donut slices={weightSlices} />
-          <DonutLegend slices={weightSlices} />
-        </View>
-      </Card>
+      <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.8}>
+        <Card>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <Donut slices={weightSlices} />
+            <DonutLegend slices={weightSlices} />
+          </View>
+        </Card>
+      </TouchableOpacity>
 
       <SectionTitle>Profit & loss</SectionTitle>
       <Card>
@@ -288,6 +309,11 @@ const styles = StyleSheet.create({
   totalLabel: { color: colors.muted, fontSize: 13 },
   totalValue: { color: colors.text, fontSize: 34, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
   cardTitle: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
+  tapHint: { color: colors.blue, fontSize: 12, fontWeight: '600' },
+  analyticsRow: { flexDirection: 'row', alignItems: 'center' },
+  analyticsTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  analyticsSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  analyticsArrow: { color: colors.blue, fontSize: 20, fontWeight: '700', marginLeft: spacing.md },
   recTitle: { color: colors.text, fontSize: 14, fontWeight: '700', flex: 1 },
   recDetail: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 6 },
   recNote: { color: colors.faint, fontSize: 11, marginBottom: spacing.md },

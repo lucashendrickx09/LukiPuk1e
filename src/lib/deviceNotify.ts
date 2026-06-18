@@ -36,10 +36,24 @@ export function deviceNotify(draft: NotificationDraft): void {
   if (!N || N.permission !== 'granted') return;
   const prefix =
     draft.severity === 'urgent' ? '🔴 URGENT — ' : draft.severity === 'important' ? '⚠️ ' : '';
+  const title = prefix + draft.title;
+  const opts = { body: draft.body, tag: draft.key };
+  // Prefer the service worker's showNotification — the plain `new Notification`
+  // constructor throws on Android and is unreliable on iOS PWAs.
+  const nav = (globalThis as any).navigator;
+  if (nav?.serviceWorker?.ready) {
+    nav.serviceWorker.ready
+      .then((reg: any) => reg.showNotification(title, opts))
+      .catch(() => fallbackNotify(N, title, opts));
+  } else {
+    fallbackNotify(N, title, opts);
+  }
+}
+
+function fallbackNotify(N: any, title: string, opts: object): void {
   try {
-    // tag dedupes repeat OS notifications for the same logical event.
-    new N(prefix + draft.title, { body: draft.body, tag: draft.key });
+    new N(title, opts);
   } catch {
-    // ignore delivery failures
+    // some browsers only allow SW notifications — nothing more to do
   }
 }
