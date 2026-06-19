@@ -1,7 +1,7 @@
 import { SUBJECTS } from '../plan'
 import type { DayPlan, SubjectCode } from '../plan'
 import type { DayResolution } from '../lib/schedule'
-import { subjectsForDay } from '../lib/schedule'
+import { cellTint, subjectsForDay } from '../lib/schedule'
 
 interface Props {
   date: Date
@@ -10,20 +10,22 @@ interface Props {
   res: DayResolution | undefined
   inWindow: boolean
   today: boolean
+  todayIso: string
   hidden: Set<SubjectCode>
   onOpen: (iso: string) => void
 }
 
-// Day-type → subtle tint (inline so the exact rgba matches the source design).
-function tint(plan: DayPlan | undefined): { background?: string; borderColor?: string } {
-  if (!plan) return {}
-  if (plan.holiday) return { background: 'rgba(232,179,57,0.07)', borderColor: 'rgba(232,179,57,0.35)' }
-  if (plan.visitor) return { background: 'rgba(154,108,240,0.07)' }
-  if (plan.rest) return { background: 'rgba(45,140,107,0.08)' }
-  return {}
-}
-
-export default function DayCell({ date, iso, plan, res, inWindow, today, hidden, onOpen }: Props) {
+export default function DayCell({
+  date,
+  iso,
+  plan,
+  res,
+  inWindow,
+  today,
+  todayIso,
+  hidden,
+  onOpen,
+}: Props) {
   const dayNum = date.getDate()
 
   // Out-of-window days: visible for grid alignment but greyed and inert.
@@ -52,7 +54,7 @@ export default function DayCell({ date, iso, plan, res, inWindow, today, hidden,
       type="button"
       data-iso={iso}
       onClick={() => onOpen(iso)}
-      style={tint(plan)}
+      style={cellTint(plan, res, iso, todayIso)}
       className={`group relative flex aspect-[1/1.05] flex-col gap-0.5 overflow-hidden rounded-lg border border-edge bg-panel p-1.5 text-left transition hover:-translate-y-px hover:border-gold ${
         today ? 'outline outline-2 -outline-offset-2 outline-gold' : ''
       }`}

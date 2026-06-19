@@ -8,7 +8,7 @@
  * ========================================================================== */
 
 import { blockId, PLAN, visibleBlocks } from '../plan'
-import type { StudyBlock, SubjectCode } from '../plan'
+import type { DayPlan, StudyBlock, SubjectCode } from '../plan'
 import { planDays } from './dates'
 
 /** Saved state for one block, keyed by its origin id. Absent = pending. */
@@ -90,6 +90,39 @@ export function resolveSchedule(states: BlockStates): Map<string, DayResolution>
 export function subjectsForDay(res: DayResolution | undefined): SubjectCode[] {
   if (!res) return []
   return [...new Set(res.active.map((r) => r.block.subject))]
+}
+
+/** Legend colours for the completion states. */
+export const DONE_COLOR = '#3fb950'
+export const MISSED_COLOR = '#f85149'
+
+/**
+ * Background/border for a day cell. Completion status wins over the day-type
+ * tint so done/missed days stand out:
+ *   • every task done            → green
+ *   • day is in the past, tasks left → red ("finished without finishing")
+ * Otherwise the rest / holiday / visitor tint (or none).
+ */
+export function cellTint(
+  plan: DayPlan | undefined,
+  res: DayResolution | undefined,
+  iso: string,
+  todayIso: string,
+): { background?: string; borderColor?: string } {
+  const active = res?.active ?? []
+  if (active.length > 0) {
+    if (active.every((a) => a.done)) {
+      return { background: 'rgba(63,185,80,0.18)', borderColor: 'rgba(63,185,80,0.55)' }
+    }
+    if (iso < todayIso) {
+      // ISO date strings compare chronologically → strictly before today = past
+      return { background: 'rgba(248,81,73,0.2)', borderColor: 'rgba(248,81,73,0.55)' }
+    }
+  }
+  if (plan?.holiday) return { background: 'rgba(232,179,57,0.07)', borderColor: 'rgba(232,179,57,0.35)' }
+  if (plan?.visitor) return { background: 'rgba(154,108,240,0.07)' }
+  if (plan?.rest) return { background: 'rgba(45,140,107,0.08)' }
+  return {}
 }
 
 export interface DayRecommendation {

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { PLAN, SUBJECTS } from '../plan'
 import type { DayPlan, SubjectCode } from '../plan'
 import type { DayResolution } from '../lib/schedule'
+import { cellTint } from '../lib/schedule'
 import { DOW_LABELS, inPlanWindow, isoOf, isToday, monthGridCells, monthLabel } from '../lib/dates'
 
 interface Props {
@@ -15,14 +16,6 @@ interface Props {
   onNext: () => void
   onOpen: (iso: string) => void
   onClose: () => void
-}
-
-function tint(plan: DayPlan | undefined): { background?: string; borderColor?: string } {
-  if (!plan) return {}
-  if (plan.holiday) return { background: 'rgba(232,179,57,0.07)', borderColor: 'rgba(232,179,57,0.35)' }
-  if (plan.visitor) return { background: 'rgba(154,108,240,0.07)' }
-  if (plan.rest) return { background: 'rgba(45,140,107,0.08)' }
-  return {}
 }
 
 const navBtn =
@@ -51,6 +44,7 @@ export default function FullCalendar({
   }, [])
 
   const cells = monthGridCells(year, month)
+  const todayIso = isoOf(new Date())
 
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto bg-base animate-[scrim-in_0.15s_ease]">
@@ -108,6 +102,7 @@ export default function FullCalendar({
                 res={resolution.get(isoOf(date))}
                 inWindow={inPlanWindow(date)}
                 today={isToday(date)}
+                todayIso={todayIso}
                 hidden={hidden}
                 onOpen={onOpen}
               />
@@ -126,6 +121,7 @@ function DetailCell({
   res,
   inWindow,
   today,
+  todayIso,
   hidden,
   onOpen,
 }: {
@@ -135,6 +131,7 @@ function DetailCell({
   res: DayResolution | undefined
   inWindow: boolean
   today: boolean
+  todayIso: string
   hidden: Set<SubjectCode>
   onOpen: (iso: string) => void
 }) {
@@ -161,7 +158,7 @@ function DetailCell({
       type="button"
       data-iso={iso}
       onClick={() => onOpen(iso)}
-      style={tint(plan)}
+      style={cellTint(plan, res, iso, todayIso)}
       className={`flex min-h-[88px] flex-col overflow-hidden rounded-lg border border-edge bg-panel p-1.5 text-left transition hover:border-gold sm:min-h-[132px] sm:p-2 ${
         today ? 'outline outline-2 -outline-offset-2 outline-gold' : ''
       }`}

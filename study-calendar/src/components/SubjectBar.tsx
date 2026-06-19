@@ -49,6 +49,14 @@ export default function SubjectBar({ hidden, onToggle }: Props) {
           />
           Rest
         </span>
+        <span className="inline-flex items-center gap-1.5 px-1 text-muted">
+          <span className="h-2.5 w-2.5 flex-none rounded-[3px]" style={{ background: '#3fb950' }} />
+          All done
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-1 text-muted">
+          <span className="h-2.5 w-2.5 flex-none rounded-[3px]" style={{ background: '#f85149' }} />
+          Missed
+        </span>
       </div>
       <p className="mt-1.5 text-[11px] text-faint">
         Tap a subject to show / hide its dots on the grid.
