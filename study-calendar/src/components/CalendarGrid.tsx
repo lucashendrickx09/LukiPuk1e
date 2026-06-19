@@ -14,6 +14,7 @@ interface Props {
 
 export default function CalendarGrid({ year, month, resolution, hidden, onOpen }: Props) {
   const cells = monthGridCells(year, month)
+  const todayIso = isoOf(new Date())
 
   return (
     <div>
@@ -41,6 +42,7 @@ export default function CalendarGrid({ year, month, resolution, hidden, onOpen }
               res={resolution.get(iso)}
               inWindow={inPlanWindow(date)}
               today={isToday(date)}
+              todayIso={todayIso}
               hidden={hidden}
               onOpen={onOpen}
             />
