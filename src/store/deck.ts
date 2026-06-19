@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { buildDeck } from '@/engine/pipeline';
+import { buildDeck, buildDeckWithClaude } from '@/engine/pipeline';
 import { getSecret, KEYS } from '@/lib/secure';
 import { BuildProgress, DeckCard } from '@/types';
 import { todayKey } from '@/utils/format';
@@ -82,21 +82,32 @@ export const useDeck = create<DeckState>()(
           momentum: { ltWeight: 0.3, moWeight: 0.7 },
         }[settings.styleLean];
 
+        const cfg = {
+          finnhubKey,
+          anthropicKey,
+          thesisModel: settings.thesisModel,
+          strictness: settings.strictness,
+          cardsPerDay: settings.cardsPerDay,
+          ...leanWeights,
+          styleLean: settings.styleLean,
+          excludedSymbols: excluded,
+          swipes: catalog.swipes,
+        };
         const onProgress = (p: BuildProgress) => set({ progress: p });
         try {
-          const cards = await buildDeck(
-            {
-              finnhubKey,
-              anthropicKey,
-              thesisModel: settings.thesisModel,
-              strictness: settings.strictness,
-              cardsPerDay: settings.cardsPerDay,
-              ...leanWeights,
-              excludedSymbols: excluded,
-              swipes: catalog.swipes,
-            },
-            onProgress,
-          );
+          let cards: DeckCard[];
+          if (anthropicKey) {
+            // Claude web-search engine; fall back to the Finnhub signal engine
+            // if it fails (no web-search access, parse error) or returns nothing.
+            try {
+              cards = await buildDeckWithClaude(cfg, onProgress);
+              if (cards.length === 0) cards = await buildDeck(cfg, onProgress);
+            } catch {
+              cards = await buildDeck(cfg, onProgress);
+            }
+          } else {
+            cards = await buildDeck(cfg, onProgress);
+          }
           set({ cards, builtDay: todayKey(), progress: IDLE });
           notifyDeckReady(cards.length);
         } catch (e) {
@@ -117,7 +128,7 @@ export const useDeck = create<DeckState>()(
       partialize: (s) => ({ cards: s.cards, builtDay: s.builtDay }) as DeckState,
       // Bump to discard any deck cached by an older build (e.g. the empty decks
       // produced by the old strict consensus gate) so a fresh one is built.
-      version: 1,
+      version: 2,
       migrate: () => ({ cards: [], builtDay: null }) as unknown as DeckState,
     },
   ),

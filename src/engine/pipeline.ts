@@ -11,6 +11,7 @@ import { UNIVERSE } from '@/data/universe';
 import {
   BuildProgress,
   Candle,
+  CapTier,
   CompanyProfile,
   DeckCard,
   KeyMetrics,
@@ -23,6 +24,7 @@ import { analystSignal, filingSignal, newsSignal } from './signals';
 import { longTermScore, momentumScore, positiveSourceTypes } from './score';
 import { buildWeights, buildWhyTag, tasteBonus } from './personalize';
 import { writeThesis } from './thesis';
+import { discoverCandidates } from '@/api/anthropic';
 
 // On-device deck build — the v0.1 stand-in for the nightly server pipeline.
 //
@@ -44,6 +46,7 @@ export interface PipelineConfig {
   cardsPerDay: number;
   ltWeight: number;
   moWeight: number;
+  styleLean: 'longterm' | 'balanced' | 'momentum';
   excludedSymbols: Set<string>; // owned + catalogued + cooldown
   swipes: SwipeRecord[];
 }
@@ -194,6 +197,118 @@ export async function buildDeck(
       sourceTypes: e.types,
       whyTag: buildWhyTag(e.types, e.signals, e.bonus, e.profile.sector),
       thesis,
+      builtAt: new Date().toISOString(),
+    });
+  }
+
+  onProgress({ phase: 'done', done: cards.length, total: cards.length, message: 'Deck ready' });
+  return cards;
+}
+
+// ---- Claude web-search deck engine --------------------------------------
+
+function clampScore(n: number | undefined, fallback: number): number {
+  if (n === undefined || !isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+const CAP_TIERS: CapTier[] = ['Mega-cap', 'Large-cap', 'Mid-cap', 'Small-cap'];
+function asCapTier(s: string | undefined): CapTier | undefined {
+  return CAP_TIERS.find((t) => t === s);
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'source';
+  }
+}
+
+// One grounded Claude research call discovers AND analyzes the picks; Finnhub
+// supplies only the live price + logo per card. Used when an Anthropic key is set.
+export async function buildDeckWithClaude(
+  config: PipelineConfig,
+  onProgress: (p: BuildProgress) => void,
+): Promise<DeckCard[]> {
+  onProgress({
+    phase: 'analysts',
+    done: 0,
+    total: 1,
+    message: 'Claude is researching the market…',
+  });
+  const candidates = await discoverCandidates(config.anthropicKey as string, config.thesisModel, {
+    count: config.cardsPerDay,
+    styleLean: config.styleLean,
+    exclude: [...config.excludedSymbols],
+  });
+
+  const seen = new Set<string>();
+  const picks = candidates
+    .filter((c) => {
+      if (!c.ticker || config.excludedSymbols.has(c.ticker) || seen.has(c.ticker)) return false;
+      seen.add(c.ticker);
+      return true;
+    })
+    .slice(0, config.cardsPerDay);
+
+  const cards: DeckCard[] = [];
+  for (let i = 0; i < picks.length; i++) {
+    const c = picks[i];
+    onProgress({ phase: 'news', done: i, total: picks.length, message: `Pricing · ${c.ticker}` });
+    let profile: CompanyProfile | undefined;
+    let quote: Quote | null = null;
+    try {
+      profile = await fetchProfile(config.finnhubKey, c.ticker);
+    } catch {
+      profile = undefined;
+    }
+    try {
+      quote = await fetchQuote(config.finnhubKey, c.ticker);
+    } catch {
+      quote = null;
+    }
+    const prof: CompanyProfile = profile ?? {
+      symbol: c.ticker,
+      name: c.name,
+      sector: c.sector,
+      marketCapM: 0,
+    };
+    const capTier =
+      profile && profile.marketCapM
+        ? capTierOf(profile.marketCapM)
+        : (asCapTier(c.capTier) ?? 'Large-cap');
+    const sources = (c.sources ?? []).slice(0, 6).map((s) => ({
+      headline: s.title,
+      source: hostOf(s.url),
+      url: s.url,
+    }));
+    const signals: SignalSummary = {
+      analyst: null,
+      news: { positive: true, score: 0.6, articles: sources.length, topHeadlines: sources },
+      filing: null,
+    };
+    cards.push({
+      symbol: c.ticker,
+      profile: prof,
+      metrics: {},
+      capTier,
+      price: quote?.price ?? 0,
+      changePct: quote?.changePct ?? 0,
+      longTermScore: clampScore(c.longTermScore, 60),
+      momentumScore: clampScore(c.momentumScore, 60),
+      signals,
+      sourceTypes: ['news'],
+      whyTag: sources.length
+        ? `Claude found ${sources.length} corroborating source${sources.length > 1 ? 's' : ''}`
+        : 'Claude market research',
+      thesis: {
+        hook: c.hook,
+        blurb: c.blurb,
+        bullCase: c.bullCase,
+        bearCase: c.bearCase,
+        generatedBy: 'llm',
+      },
       builtAt: new Date().toISOString(),
     });
   }
