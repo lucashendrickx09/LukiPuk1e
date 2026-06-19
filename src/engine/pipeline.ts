@@ -3,27 +3,38 @@ import {
   fetchMetrics,
   fetchProfile,
   fetchQuote,
-  fetchRecommendations,
+  fetchRecommendationsCached,
 } from '@/api/finnhub';
 import { fetchRecent8KCount } from '@/api/edgar';
 import { fetchDailyCandles, pctReturn } from '@/api/stooq';
 import { UNIVERSE } from '@/data/universe';
-import { BuildProgress, DeckCard, SignalSummary, SwipeRecord } from '@/types';
+import {
+  BuildProgress,
+  Candle,
+  CompanyProfile,
+  DeckCard,
+  KeyMetrics,
+  Quote,
+  SignalSummary,
+  SwipeRecord,
+} from '@/types';
 import { capTierOf, daysAgo, isoDate } from '@/utils/format';
 import { analystSignal, filingSignal, newsSignal } from './signals';
-import { longTermScore, momentumScore, passesGate, positiveSourceTypes } from './score';
+import { longTermScore, momentumScore, positiveSourceTypes } from './score';
 import { buildWeights, buildWhyTag, tasteBonus } from './personalize';
 import { writeThesis } from './thesis';
-import { ThesisInput } from '@/api/anthropic';
 
 // On-device deck build — the v0.1 stand-in for the nightly server pipeline.
-// Pure orchestration over the engine modules, so the same logic can lift into
-// a Supabase scheduled function in v0.2 unchanged.
 //
-// Stage 1: one cheap analyst-trend call per universe symbol.
-// Stage 2: news + filings + fundamentals + price history for the survivors.
-// Gate:    >= `strictness` independent positive source types.
-// Stage 3: rank with taste weights, then write theses for the final deck only.
+// Stage 1: cached analyst-trend lookup per universe symbol → analyst-positive
+//          survivors (the reliable free-tier signal).
+// Stage 2: news + price history for the strongest survivors. No hard
+//          multi-source gate — an analyst buy-lean is itself a valid reason to
+//          surface a stock; extra agreeing sources (news/filing) just rank it
+//          higher. (A strict gate starves the deck because free-tier news
+//          sentiment is weak and SEC filing checks are CORS-blocked in the web app.)
+// Stage 3: rank with style lean + taste + source agreement, cap to the deck
+//          size, then fetch fundamentals and write theses for the final cards only.
 
 export interface PipelineConfig {
   finnhubKey: string;
@@ -31,11 +42,20 @@ export interface PipelineConfig {
   thesisModel: string;
   strictness: 1 | 2 | 3;
   cardsPerDay: number;
-  // Style lean from Settings: how the two scores blend into the deck ranking.
   ltWeight: number;
   moWeight: number;
   excludedSymbols: Set<string>; // owned + catalogued + cooldown
   swipes: SwipeRecord[];
+}
+
+interface Enriched {
+  symbol: string;
+  profile: CompanyProfile;
+  quote: Quote | null;
+  signals: SignalSummary;
+  candles: Candle[] | null;
+  lt: number;
+  mo: number;
 }
 
 export async function buildDeck(
@@ -44,7 +64,7 @@ export async function buildDeck(
 ): Promise<DeckCard[]> {
   const candidates = UNIVERSE.filter((u) => !config.excludedSymbols.has(u.symbol));
 
-  // Stage 1 — analyst recommendation trends across the whole universe.
+  // Stage 1 — analyst recommendation trends (cached per symbol for a few days).
   const stage1: { symbol: string; analyst: SignalSummary['analyst'] }[] = [];
   for (let i = 0; i < candidates.length; i++) {
     const u = candidates[i];
@@ -52,10 +72,10 @@ export async function buildDeck(
       phase: 'analysts',
       done: i,
       total: candidates.length,
-      message: `Reading analyst trends · ${u.symbol}`,
+      message: `Reading analyst ratings · ${u.symbol}`,
     });
     try {
-      const trends = await fetchRecommendations(config.finnhubKey, u.symbol);
+      const trends = await fetchRecommendationsCached(config.finnhubKey, u.symbol);
       stage1.push({ symbol: u.symbol, analyst: analystSignal(trends) });
     } catch (e) {
       if (e instanceof Error && e.message.includes('key rejected')) throw e;
@@ -63,24 +83,18 @@ export async function buildDeck(
     }
   }
 
-  // Survivors: strictness 1 lets a lone strong analyst signal through; above
-  // that, analyst-positive is the cheap prerequisite for the news/filing pass.
-  // ETFs rarely carry analyst ratings, so they go through on momentum review.
-  const survivors = stage1.filter((s) => {
-    const isEtf = UNIVERSE.find((u) => u.symbol === s.symbol)?.etf;
-    return s.analyst?.positive || (isEtf && config.strictness === 1);
-  });
+  // Survivors: the street leans buy. Sort by conviction and cap the deep scan
+  // so stage 2 stays bounded regardless of universe size.
+  const maxDeep = Math.max(config.cardsPerDay * 2, 14);
+  const survivors = stage1
+    .filter((s) => s.analyst?.positive)
+    .sort((a, b) => (b.analyst?.buyRatio ?? 0) - (a.analyst?.buyRatio ?? 0))
+    .slice(0, maxDeep);
 
-  // Stage 2 — deep signals for survivors only.
+  // Stage 2 — news + price history for survivors. Every survivor is eligible.
   const from = isoDate(daysAgo(7));
   const to = isoDate(new Date());
-  const enriched: {
-    symbol: string;
-    signals: SignalSummary;
-    lt: number;
-    mo: number;
-    input: ThesisInput;
-  }[] = [];
+  const enriched: Enriched[] = [];
 
   for (let i = 0; i < survivors.length; i++) {
     const s = survivors[i];
@@ -88,63 +102,51 @@ export async function buildDeck(
       phase: 'news',
       done: i,
       total: survivors.length,
-      message: `Reading news & filings · ${s.symbol}`,
+      message: `Reading news · ${s.symbol}`,
     });
     try {
-      const [news, profile, metrics, quote] = [
-        await fetchCompanyNews(config.finnhubKey, s.symbol, from, to),
-        await fetchProfile(config.finnhubKey, s.symbol),
-        await fetchMetrics(config.finnhubKey, s.symbol),
-        await fetchQuote(config.finnhubKey, s.symbol),
-      ];
+      const profile = await fetchProfile(config.finnhubKey, s.symbol);
+      const quote = await fetchQuote(config.finnhubKey, s.symbol);
+      const news = await fetchCompanyNews(config.finnhubKey, s.symbol, from, to);
       const newsSig = newsSignal(news);
       const otherPositive = Boolean(s.analyst?.positive || newsSig?.positive);
-      const recent8K = otherPositive ? await fetchRecent8KCount(s.symbol) : null;
+      const recent8K = newsSig?.positive ? await fetchRecent8KCount(s.symbol) : null;
       const signals: SignalSummary = {
         analyst: s.analyst,
         news: newsSig,
         filing: filingSignal(recent8K, otherPositive),
       };
-      const types = positiveSourceTypes(signals);
-      if (!passesGate(types, config.strictness)) continue;
-
       const candles = await fetchDailyCandles(s.symbol);
-      const lt = longTermScore(signals, metrics);
-      const mo = momentumScore(signals, candles);
-      const capTier = capTierOf(profile.marketCapM);
       enriched.push({
         symbol: s.symbol,
+        profile,
+        quote,
         signals,
-        lt,
-        mo,
-        input: {
-          symbol: s.symbol,
-          name: profile.name,
-          sector: profile.sector,
-          capTier,
-          price: quote?.price ?? 0,
-          longTermScore: lt,
-          momentumScore: mo,
-          signals,
-          metrics: { ...metrics },
-          return1M: candles ? pctReturn(candles, 21) : null,
-          return3M: candles ? pctReturn(candles, 63) : null,
-        },
+        candles,
+        lt: longTermScore(signals, {}),
+        mo: momentumScore(signals, candles),
       });
-      // Stash profile/quote for card assembly without refetching.
-      profileCache.set(s.symbol, { profile, quotePrice: quote?.price ?? 0, quotePct: quote?.changePct ?? 0 });
     } catch {
       // One bad symbol never kills the build.
     }
   }
 
-  // Stage 3 — personalization rank, cap to deck size, write theses.
+  // Stage 3 — rank, cap, then fetch fundamentals + write theses for finalists.
   const weights = buildWeights(config.swipes);
   const ranked = enriched
     .map((e) => {
-      const cached = profileCache.get(e.symbol)!;
-      const bonus = tasteBonus(weights, cached.profile.sector, capTierOf(cached.profile.marketCapM));
-      return { ...e, bonus, rank: e.lt * config.ltWeight + e.mo * config.moWeight + bonus };
+      const types = positiveSourceTypes(e.signals);
+      const bonus = tasteBonus(weights, e.profile.sector, capTierOf(e.profile.marketCapM));
+      // Agreement boost: more independent positive sources rank higher, and
+      // meeting the chosen strictness gives an extra lift — but nothing is
+      // excluded, so the deck is never empty when survivors exist.
+      const agreement = (types.length >= config.strictness ? 8 : 0) + types.length * 2;
+      return {
+        ...e,
+        types,
+        bonus,
+        rank: e.lt * config.ltWeight + e.mo * config.moWeight + bonus + agreement,
+      };
     })
     .sort((a, b) => b.rank - a.rank)
     .slice(0, config.cardsPerDay);
@@ -156,24 +158,41 @@ export async function buildDeck(
       phase: 'thesis',
       done: i,
       total: ranked.length,
-      message: `Writing thesis · ${e.symbol}`,
+      message: `Analyzing · ${e.symbol}`,
     });
-    const cached = profileCache.get(e.symbol)!;
-    const capTier = capTierOf(cached.profile.marketCapM);
-    const types = positiveSourceTypes(e.signals);
-    const thesis = await writeThesis(config.anthropicKey, config.thesisModel, e.input);
-    cards.push({
+    let metrics: KeyMetrics = {};
+    try {
+      metrics = await fetchMetrics(config.finnhubKey, e.symbol);
+    } catch {
+      // fundamentals optional
+    }
+    const capTier = capTierOf(e.profile.marketCapM);
+    const lt = longTermScore(e.signals, metrics); // richer once fundamentals are in
+    const thesis = await writeThesis(config.anthropicKey, config.thesisModel, {
       symbol: e.symbol,
-      profile: cached.profile,
-      metrics: e.input.metrics,
+      name: e.profile.name,
+      sector: e.profile.sector,
       capTier,
-      price: cached.quotePrice,
-      changePct: cached.quotePct,
-      longTermScore: e.lt,
+      price: e.quote?.price ?? 0,
+      longTermScore: lt,
       momentumScore: e.mo,
       signals: e.signals,
-      sourceTypes: types,
-      whyTag: buildWhyTag(types, e.signals, e.bonus, cached.profile.sector),
+      metrics,
+      return1M: e.candles ? pctReturn(e.candles, 21) : null,
+      return3M: e.candles ? pctReturn(e.candles, 63) : null,
+    });
+    cards.push({
+      symbol: e.symbol,
+      profile: e.profile,
+      metrics,
+      capTier,
+      price: e.quote?.price ?? 0,
+      changePct: e.quote?.changePct ?? 0,
+      longTermScore: lt,
+      momentumScore: e.mo,
+      signals: e.signals,
+      sourceTypes: e.types,
+      whyTag: buildWhyTag(e.types, e.signals, e.bonus, e.profile.sector),
       thesis,
       builtAt: new Date().toISOString(),
     });
@@ -182,8 +201,3 @@ export async function buildDeck(
   onProgress({ phase: 'done', done: cards.length, total: cards.length, message: 'Deck ready' });
   return cards;
 }
-
-const profileCache = new Map<
-  string,
-  { profile: DeckCard['profile']; quotePrice: number; quotePct: number }
->();

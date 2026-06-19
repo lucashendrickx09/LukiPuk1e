@@ -1,5 +1,6 @@
 import { CompanyProfile, KeyMetrics, Quote } from '@/types';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BASE = 'https://finnhub.io/api/v1';
 
@@ -90,6 +91,36 @@ export async function fetchRecommendations(
 ): Promise<RecommendationTrend[]> {
   const rows = await get<RecommendationTrend[]>(key, '/stock/recommendation', { symbol });
   return Array.isArray(rows) ? rows : [];
+}
+
+// Analyst recommendation trends change slowly (roughly monthly), so cache them
+// for a few days. This turns the universe-wide stage-1 scan from a ~minute of
+// throttled calls into an instant lookup on subsequent deck builds.
+const REC_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+export async function fetchRecommendationsCached(
+  key: string,
+  symbol: string,
+): Promise<RecommendationTrend[]> {
+  const cacheKey = 'stockpile.rec.' + symbol;
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached) as { t: number; d: RecommendationTrend[] };
+      if (Date.now() - parsed.t < REC_TTL_MS && Array.isArray(parsed.d)) return parsed.d;
+    }
+  } catch {
+    // fall through to network
+  }
+  const d = await fetchRecommendations(key, symbol);
+  if (d.length > 0) {
+    try {
+      await AsyncStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), d }));
+    } catch {
+      // cache write best-effort
+    }
+  }
+  return d;
 }
 
 export interface NewsItem {

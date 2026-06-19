@@ -115,6 +115,10 @@ export const useDeck = create<DeckState>()(
       name: 'stockpile.deck',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ cards: s.cards, builtDay: s.builtDay }) as DeckState,
+      // Bump to discard any deck cached by an older build (e.g. the empty decks
+      // produced by the old strict consensus gate) so a fresh one is built.
+      version: 1,
+      migrate: () => ({ cards: [], builtDay: null }) as unknown as DeckState,
     },
   ),
 );
