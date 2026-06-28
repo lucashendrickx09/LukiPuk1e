@@ -40,7 +40,8 @@ clipper/
 │   ├── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
 │   ├── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
 │   ├── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
-│   └── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
+│   ├── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
+│   └── publish.py      # Phase 5 — Publisher interface, Postiz, scheduling, gate
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
@@ -119,6 +120,38 @@ Secrets are **only** ever read from `.env` / the environment — never from
 `config.yaml`, never hardcoded.
 
 ---
+
+## Run — Phase 5 (publish)
+
+```bash
+python run.py publish              # schedule APPROVED clips to platforms
+python run.py publish --clip 12    # one approved clip
+```
+
+**What you should see:** `publish` schedules every clip with status `approved`
+(set by the Phase 6 Telegram loop) to each configured platform via the
+`Publisher` (default `PostizPublisher`), with day-spaced slots from
+`posting.per_platform` so clips never post all at once. Per-platform metadata is
+truncated to each platform's title/caption/hashtag limits. A `posts` row
+(scheduled/posted/failed) is written per clip+platform; once all platforms are
+scheduled the clip moves `approved → posted`. Re-running never double-posts
+(unique clip+platform), and a per-platform failure is recorded as `failed` and
+retried next run.
+
+**Two guarantees enforced in code:**
+- **Nothing auto-posts** (Rule 2) — only `approved` clips are touched; a `ready`
+  (un-approved) clip is never scheduled.
+- **Permission gate** (Rule 1) — a clip whose source isn't
+  owner/licensed/fair_use is **BLOCKED**; no post is ever created for it.
+
+Needs a self-hosted Postiz (`publisher.postiz.base_url` + channel ids) and
+`POSTIZ_API_KEY` in `.env`. No-ops on an empty/unapproved queue without a key.
+
+Offline self-test (metadata, scheduling, gate, idempotency — no Postiz):
+
+```bash
+python -m unittest tests.test_phase5 -v
+```
 
 ## Run — Phase 4 (cut, reframe, caption)
 
@@ -264,8 +297,8 @@ binary is missing.
 | **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) |
 | **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) |
 | **3** | ✅ Claude picks the clips (strict-JSON highlight selection) |
-| **4** | ✅ Cut, reframe (OpenCV 16:9→9:16), animated captions, encode *(this phase)* |
-| 5 | Posting abstraction (Postiz publisher, scheduling) |
+| **4** | ✅ Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
+| **5** | ✅ Posting abstraction (Postiz publisher, scheduling, permission gate) *(this phase)* |
 | 6 | One-tap Telegram approval loop |
 | 7 | End-to-end run loop + daily reporting |
 

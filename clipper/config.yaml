@@ -101,6 +101,10 @@ publisher:
   postiz:
     base_url: "http://localhost:3000"
     # API key read from .env -> POSTIZ_API_KEY
+    channels:                  # our platform name -> Postiz integration/channel id
+      instagram_reels: ""
+      youtube_shorts: ""
+      tiktok: ""
 
 # ── Approval / notifications (Telegram, Phase 6) ─────────────────────────────
 telegram:

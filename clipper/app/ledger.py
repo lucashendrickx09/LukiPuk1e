@@ -474,3 +474,67 @@ def delete_unrendered_clips(conn: sqlite3.Connection, video_id: int) -> int:
         (video_id,),
     )
     return cur.rowcount
+
+
+def get_source_for_clip(conn: sqlite3.Connection, clip_id: int) -> sqlite3.Row | None:
+    """The source row behind a clip (clips -> videos -> sources). Used for the
+    permission gate at posting time (Hard Rule 1)."""
+    return conn.execute(
+        """
+        SELECT s.* FROM clips c
+        JOIN videos v ON v.id = c.video_id
+        JOIN sources s ON s.id = v.source_id
+        WHERE c.id = ?
+        """,
+        (clip_id,),
+    ).fetchone()
+
+
+# ---- posts (Phase 5) ------------------------------------------------------
+def get_post(conn: sqlite3.Connection, clip_id: int, platform: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM posts WHERE clip_id = ? AND platform = ?", (clip_id, platform)
+    ).fetchone()
+
+
+def list_posts(
+    conn: sqlite3.Connection, platform: str | None = None, status: str | None = None
+) -> list[sqlite3.Row]:
+    q = "SELECT * FROM posts"
+    where: list[str] = []
+    params: list[object] = []
+    if platform is not None:
+        where.append("platform = ?"); params.append(platform)
+    if status is not None:
+        where.append("status = ?"); params.append(status)
+    if where:
+        q += " WHERE " + " AND ".join(where)
+    q += " ORDER BY id"
+    return conn.execute(q, params).fetchall()
+
+
+def upsert_post(
+    conn: sqlite3.Connection,
+    clip_id: int,
+    platform: str,
+    *,
+    scheduled_for: str | None,
+    external_id: str | None,
+    status: str,
+    error: str | None = None,
+) -> None:
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO posts(clip_id, platform, scheduled_for, external_id, status,
+                          error, created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(clip_id, platform) DO UPDATE SET
+            scheduled_for = excluded.scheduled_for,
+            external_id = excluded.external_id,
+            status = excluded.status,
+            error = excluded.error,
+            updated_at = excluded.updated_at
+        """,
+        (clip_id, platform, scheduled_for, external_id, status, error, now, now),
+    )
