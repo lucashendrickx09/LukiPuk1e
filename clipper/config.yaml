@@ -66,6 +66,7 @@ caption:
   outline_color: "#000000"
   outline_width: 4
   max_words_per_line: 4
+  margin_v: 200                # vertical margin from the aligned edge (px)
 
 # ── Video output (Phase 4) ───────────────────────────────────────────────────
 video:
@@ -75,6 +76,7 @@ video:
   reframe: "face_track"        # face_track | center_crop
   crop_smoothing: 0.85         # 0–1, higher = smoother/slower crop path
   loudnorm: true               # ffmpeg loudnorm audio normalisation
+  ffmpeg_bin: "ffmpeg"         # binary name or absolute path
 
 # ── Posting schedule (Phase 5) ───────────────────────────────────────────────
 # Clips are spaced across the day per platform; they never all post at once.

@@ -28,7 +28,7 @@ from app.config import (  # noqa: E402
     Config,
     load_config,
 )
-from app import analyze, deps, ingest, ledger, transcribe  # noqa: E402
+from app import analyze, deps, ingest, ledger, render, transcribe  # noqa: E402
 from app.ytdlp import classify_url, make_provider  # noqa: E402
 
 # ---- tiny ANSI helpers (no dependency) ----------------------------------
@@ -227,6 +227,20 @@ def cmd_analyze(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+# ===========================================================================
+# Phase 4 — render (cut, reframe, caption, encode)
+# ===========================================================================
+def cmd_render(cfg: Config, args: argparse.Namespace) -> int:
+    report = render.run_render(cfg, only_clip=args.clip, force=args.force)
+    _hr("Render summary")
+    print(f"  {report.line()}")
+    for note in report.notes:
+        print(f"  {_WARN} {note}")
+    if report.errors and report.rendered == 0:
+        return 1
+    return 0
+
+
 def _not_yet(name: str, phase: str):
     def _runner(cfg: Config, args: argparse.Namespace) -> int:
         print(f"`{name}` arrives in {phase}.")
@@ -289,8 +303,14 @@ def _build_parser() -> argparse.ArgumentParser:
     an_p.add_argument("--dry-run", action="store_true",
                       help="Call Claude and print picks, but don't write to the ledger.")
 
-    for name, phase in (("render", "Phase 4"), ("publish", "Phase 5"),
-                        ("run", "Phase 7")):
+    # ---- render ----------------------------------------------------------
+    rn_p = sub.add_parser("render",
+                          help="Cut/reframe/caption candidate clips -> /ready.")
+    rn_p.add_argument("--clip", type=int, default=None, help="Limit to one clip id.")
+    rn_p.add_argument("--force", action="store_true",
+                      help="Re-render even clips already marked ready.")
+
+    for name, phase in (("publish", "Phase 5"), ("run", "Phase 7")):
         sub.add_parser(name, help=f"({phase})")
     return parser
 
@@ -325,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         "ingest": cmd_ingest,
         "transcribe": cmd_transcribe,
         "analyze": cmd_analyze,
-        "render": _not_yet("render", "Phase 4"),
+        "render": cmd_render,
         "publish": _not_yet("publish", "Phase 5"),
         "run": _not_yet("run", "Phase 7"),
     }

@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 2  # v2 adds the transcripts table (Phase 2)
+SCHEMA_VERSION = 3  # v2 adds transcripts (Phase 2); v3 adds clips.error (Phase 4)
 
 # Status vocabularies, exported so other phases use the same strings.
 SOURCE_STATUS = ("active", "paused", "blocked")
@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS clips (
     reason           TEXT,
     status           TEXT NOT NULL DEFAULT 'candidate',
     rejected_reason  TEXT,
+    error            TEXT,                                 -- render failure message (Phase 4)
     file_path        TEXT,                                 -- in /ready once rendered
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL
@@ -160,10 +161,13 @@ def init_db(db_path: Path | str) -> bool:
     fresh = not path.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
     with session(path) as conn:
-        # All schema changes so far are additive (CREATE TABLE IF NOT EXISTS),
-        # so re-running the script migrates older DBs in place. We then bump the
-        # recorded version to match.
+        # Table/index additions are CREATE ... IF NOT EXISTS, so re-running the
+        # script migrates older DBs in place. Column additions need an explicit
+        # (idempotent) ALTER.
         conn.executescript(SCHEMA)
+        clip_cols = {r[1] for r in conn.execute("PRAGMA table_info(clips)")}
+        if "error" not in clip_cols:  # v2 -> v3
+            conn.execute("ALTER TABLE clips ADD COLUMN error TEXT")
         conn.execute(
             "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -270,6 +274,10 @@ def get_video(conn: sqlite3.Connection, youtube_id: str) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT * FROM videos WHERE youtube_id = ?", (youtube_id,)
     ).fetchone()
+
+
+def get_video_by_id(conn: sqlite3.Connection, video_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM videos WHERE id = ?", (video_id,)).fetchone()
 
 
 def video_exists(conn: sqlite3.Connection, youtube_id: str) -> bool:
@@ -431,6 +439,30 @@ def list_clips(
         q += " WHERE " + " AND ".join(where)
     q += " ORDER BY id"
     return conn.execute(q, params).fetchall()
+
+
+def get_clip(conn: sqlite3.Connection, clip_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+
+
+def set_clip_status(
+    conn: sqlite3.Connection,
+    clip_id: int,
+    status: str,
+    *,
+    file_path: str | None = None,
+    error: str | None = None,
+) -> None:
+    fields = ["status = ?", "updated_at = ?"]
+    params: list[object] = [status, utcnow()]
+    if file_path is not None:
+        fields.append("file_path = ?"); params.append(file_path)
+    if status == "error":
+        fields.append("error = ?"); params.append(error)
+    else:
+        fields.append("error = NULL")
+    params.append(clip_id)
+    conn.execute(f"UPDATE clips SET {', '.join(fields)} WHERE id = ?", params)
 
 
 def delete_unrendered_clips(conn: sqlite3.Connection, video_id: int) -> int:

@@ -39,7 +39,8 @@ clipper/
 │   ├── ytdlp.py        # Phase 1 — yt-dlp wrapper (enumerate + download)
 │   ├── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
 │   ├── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
-│   └── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
+│   ├── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
+│   └── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
@@ -118,6 +119,31 @@ Secrets are **only** ever read from `.env` / the environment — never from
 `config.yaml`, never hardcoded.
 
 ---
+
+## Run — Phase 4 (cut, reframe, caption)
+
+```bash
+python run.py render                  # render all candidate clips -> data/ready/
+python run.py render --clip 12        # one clip by id
+python run.py render --force          # re-render clips already marked ready
+```
+
+**What you should see:** each `candidate` clip is cut from its source, reframed
+16:9 → 9:16 (OpenCV face-tracking with a smoothed crop path; **center-crop
+fallback** if no face / no OpenCV), captioned with karaoke word-by-word
+highlighting burned from the whisper word timings, loudness-normalized, and
+written as a 1080×1920 H.264 file to `data/ready/clip_<id>.mp4`. The clip moves
+`candidate → cutting → ready`; re-running skips finished clips unless `--force`.
+A render failure is recorded as `status=error` (with the message) and the run
+continues. Needs `ffmpeg`; face-tracking additionally needs `opencv-python`
+(`pip install opencv-python`). Caption style and output settings are configurable
+under `caption:` / `video:` in `config.yaml`.
+
+Offline self-test (colour/caption/ASS/smoothing + orchestration, no ffmpeg):
+
+```bash
+python -m unittest tests.test_phase4 -v
+```
 
 ## Run — Phase 3 (Claude picks the clips)
 
@@ -237,8 +263,8 @@ binary is missing.
 | **0** | ✅ Scaffold, config, ledger, dependency checks |
 | **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) |
 | **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) |
-| **3** | ✅ Claude picks the clips (strict-JSON highlight selection) *(this phase)* |
-| 4 | Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
+| **3** | ✅ Claude picks the clips (strict-JSON highlight selection) |
+| **4** | ✅ Cut, reframe (OpenCV 16:9→9:16), animated captions, encode *(this phase)* |
 | 5 | Posting abstraction (Postiz publisher, scheduling) |
 | 6 | One-tap Telegram approval loop |
 | 7 | End-to-end run loop + daily reporting |
