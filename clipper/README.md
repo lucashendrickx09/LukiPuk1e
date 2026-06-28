@@ -37,8 +37,9 @@ clipper/
 │   ├── ledger.py       # Phase 0 — SQLite ledger (sources/videos/clips/posts)
 │   ├── deps.py         # Phase 0 — verify ffmpeg / yt-dlp / whisper.cpp
 │   ├── ytdlp.py        # Phase 1 — yt-dlp wrapper (enumerate + download)
-│   └── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
-├── tests/              # Phase 1 — offline self-test (fake provider, no network)
+│   ├── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
+│   └── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
+├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
 
@@ -117,6 +118,32 @@ Secrets are **only** ever read from `.env` / the environment — never from
 
 ---
 
+## Run — Phase 2 (transcribe)
+
+```bash
+python run.py transcribe              # transcribe all downloaded videos
+python run.py transcribe --video VIDEO_ID --force   # one video, re-do it
+```
+
+**What you should see:** each downloaded video gets a word-level transcript cached
+to `data/transcripts/<id>.json` (containing `segments` *and* `words` with
+start/end times), the video's ledger status moves `downloaded → transcribed`, and
+a row lands in the `transcripts` table. Re-running transcribes **nothing new**
+unless `--force`. A failure is recorded as `status=error` and the run continues.
+
+Engine is set by `transcription.engine` in `config.yaml`:
+- `whisper.cpp` (default) — needs the built binary + a `ggml-*.bin` model and
+  `ffmpeg` (used to extract 16 kHz mono audio). Point `whisper_cpp_bin` /
+  `whisper_cpp_model_path` at your build.
+- `faster-whisper` — simplest path: `pip install faster-whisper`, no binary,
+  decodes the video directly and returns word timestamps natively.
+
+Offline self-test (parser + orchestration, no whisper/ffmpeg needed):
+
+```bash
+python -m unittest tests.test_phase2 -v
+```
+
 ## Run — Phase 1 (source management + ingest)
 
 ```bash
@@ -179,8 +206,8 @@ binary is missing.
 | Phase | What it adds |
 |------:|--------------|
 | **0** | ✅ Scaffold, config, ledger, dependency checks |
-| **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) *(this phase)* |
-| 2 | Transcription (whisper.cpp, word-level timestamps) |
+| **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) |
+| **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) *(this phase)* |
 | 3 | Claude picks the clips (strict-JSON highlight selection) |
 | 4 | Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
 | 5 | Posting abstraction (Postiz publisher, scheduling) |

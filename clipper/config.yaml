@@ -42,10 +42,13 @@ claude:
 # ── Transcription (Phase 2) ──────────────────────────────────────────────────
 transcription:
   engine: "whisper.cpp"                       # whisper.cpp | faster-whisper
-  model: "base.en"
+  model: "base.en"                            # faster-whisper model size, or label for whisper.cpp
+  language: "en"                              # null/omit to auto-detect
+  ffmpeg_bin: "ffmpeg"                        # used to extract 16kHz mono WAV for whisper.cpp
   whisper_cpp_bin: "whisper-cli"              # binary name or absolute path
   whisper_cpp_model_path: "models/ggml-base.en.bin"
-  language: "en"
+  whisper_cpp_extra_args: []                  # e.g. ["-t", "8"] for thread count
+  compute_type: "int8"                        # faster-whisper only: int8 | float16 | float32
 
 # ── Caption style (Phase 4) ──────────────────────────────────────────────────
 caption:

@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds the transcripts table (Phase 2)
 
 # Status vocabularies, exported so other phases use the same strings.
 SOURCE_STATUS = ("active", "paused", "blocked")
@@ -106,6 +106,20 @@ CREATE TABLE IF NOT EXISTS posts (
     UNIQUE (clip_id, platform)                             -- never double-post a clip to a platform
 );
 
+CREATE TABLE IF NOT EXISTS transcripts (
+    video_id      INTEGER PRIMARY KEY REFERENCES videos(id) ON DELETE CASCADE,
+    engine        TEXT NOT NULL,                          -- whisper.cpp | faster-whisper
+    model         TEXT,
+    language      TEXT,
+    duration_sec  REAL,
+    path          TEXT NOT NULL,                          -- cached transcript JSON on disk
+    n_segments    INTEGER,
+    n_words       INTEGER,
+    segments_json TEXT,                                   -- coarse segment map for quick queries
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source_id);
 CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 CREATE INDEX IF NOT EXISTS idx_clips_video  ON clips(video_id);
@@ -146,18 +160,19 @@ def init_db(db_path: Path | str) -> bool:
     fresh = not path.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
     with session(path) as conn:
+        # All schema changes so far are additive (CREATE TABLE IF NOT EXISTS),
+        # so re-running the script migrates older DBs in place. We then bump the
+        # recorded version to match.
         conn.executescript(SCHEMA)
-        cur = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
-        row = cur.fetchone()
-        if row is None:
-            conn.execute(
-                "INSERT INTO meta(key, value) VALUES('schema_version', ?)",
-                (str(SCHEMA_VERSION),),
-            )
-            conn.execute(
-                "INSERT OR IGNORE INTO meta(key, value) VALUES('created_at', ?)",
-                (utcnow(),),
-            )
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(SCHEMA_VERSION),),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO meta(key, value) VALUES('created_at', ?)",
+            (utcnow(),),
+        )
     return fresh
 
 
@@ -316,3 +331,56 @@ def set_video_status(
     conn.execute(
         f"UPDATE videos SET {', '.join(fields)} WHERE youtube_id = ?", params
     )
+
+
+def list_videos(
+    conn: sqlite3.Connection, status: str | None = None
+) -> list[sqlite3.Row]:
+    if status is None:
+        return conn.execute("SELECT * FROM videos ORDER BY id").fetchall()
+    return conn.execute(
+        "SELECT * FROM videos WHERE status = ? ORDER BY id", (status,)
+    ).fetchall()
+
+
+# ---- transcripts (Phase 2) -----------------------------------------------
+def upsert_transcript(
+    conn: sqlite3.Connection,
+    video_id: int,
+    *,
+    engine: str,
+    model: str | None,
+    language: str | None,
+    duration_sec: float | None,
+    path: str,
+    n_segments: int,
+    n_words: int,
+    segments_json: str,
+) -> None:
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO transcripts(video_id, engine, model, language, duration_sec,
+                                path, n_segments, n_words, segments_json,
+                                created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(video_id) DO UPDATE SET
+            engine = excluded.engine,
+            model = excluded.model,
+            language = excluded.language,
+            duration_sec = excluded.duration_sec,
+            path = excluded.path,
+            n_segments = excluded.n_segments,
+            n_words = excluded.n_words,
+            segments_json = excluded.segments_json,
+            updated_at = excluded.updated_at
+        """,
+        (video_id, engine, model, language, duration_sec, path,
+         n_segments, n_words, segments_json, now, now),
+    )
+
+
+def get_transcript(conn: sqlite3.Connection, video_id: int) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM transcripts WHERE video_id = ?", (video_id,)
+    ).fetchone()
