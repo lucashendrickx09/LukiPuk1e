@@ -1,0 +1,109 @@
+# =============================================================================
+# Automated YouTube -> Short-Form Clipper — configuration
+# =============================================================================
+# Non-secret settings only. Secrets (API keys/tokens) live in .env and are read
+# from the environment — NEVER put credentials in this file.
+# =============================================================================
+
+# ── Sources ──────────────────────────────────────────────────────────────────
+# Each source is a single video URL, or a channel/playlist URL to monitor.
+#   type:               video | channel | playlist
+#   permission_status:  owner | licensed | fair_use | unverified
+# HARD RULE 1: sources with permission_status "unverified" are BLOCKED from the
+# pipeline (no download, no clipping, no posting) until you clear them.
+sources: []
+#   - url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+#     type: video
+#     permission_status: owner
+#   - url: "https://www.youtube.com/@SomePodcast"
+#     type: channel
+#     permission_status: licensed
+
+# ── Clip constraints ─────────────────────────────────────────────────────────
+clip:
+  min_seconds: 20
+  max_seconds: 60
+  padding_seconds: 0.3          # padding around the cut, snapped to word boundaries
+  hook_score_threshold: 7       # 1–10; only clips scoring >= this proceed
+
+# ── Highlight selection (Claude — the brain, Phase 3) ────────────────────────
+claude:
+  model: "claude-opus-4-8"      # configurable Claude model string
+  temperature: 0.4
+  max_transcript_chars: 60000   # chunk transcripts longer than this
+  max_candidates_per_video: 12
+
+# ── Transcription (Phase 2) ──────────────────────────────────────────────────
+transcription:
+  engine: "whisper.cpp"                       # whisper.cpp | faster-whisper
+  model: "base.en"
+  whisper_cpp_bin: "whisper-cli"              # binary name or absolute path
+  whisper_cpp_model_path: "models/ggml-base.en.bin"
+  language: "en"
+
+# ── Caption style (Phase 4) ──────────────────────────────────────────────────
+caption:
+  style: "karaoke"             # word-by-word highlight from whisper word timings
+  font: "Arial"
+  font_size: 64
+  position: "center"           # top | center | bottom
+  text_color: "#FFFFFF"
+  highlight_color: "#FFD400"
+  outline_color: "#000000"
+  outline_width: 4
+  max_words_per_line: 4
+
+# ── Video output (Phase 4) ───────────────────────────────────────────────────
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  reframe: "face_track"        # face_track | center_crop
+  crop_smoothing: 0.85         # 0–1, higher = smoother/slower crop path
+  loudnorm: true               # ffmpeg loudnorm audio normalisation
+
+# ── Posting schedule (Phase 5) ───────────────────────────────────────────────
+# Clips are spaced across the day per platform; they never all post at once.
+posting:
+  enabled: true
+  default_timezone: "Europe/Brussels"
+  max_per_day_per_platform: 3
+  per_platform:
+    instagram_reels:
+      timezone: "Europe/Brussels"
+      times: ["11:00", "17:00", "20:00"]
+    youtube_shorts:
+      timezone: "Europe/Brussels"
+      times: ["12:00", "18:00"]
+    tiktok:
+      timezone: "Europe/Brussels"
+      times: ["13:00", "19:00", "21:00"]
+
+# ── Publisher backend (Phase 5) ──────────────────────────────────────────────
+publisher:
+  backend: "postiz"            # postiz | ayrshare
+  postiz:
+    base_url: "http://localhost:3000"
+    # API key read from .env -> POSTIZ_API_KEY
+
+# ── Approval / notifications (Telegram, Phase 6) ─────────────────────────────
+telegram:
+  enabled: true
+  # credentials read from .env -> TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+  daily_summary: true
+
+# ── Paid-API opt-ins (HARD RULE 5: free/self-hosted by default) ──────────────
+# Everything is free/self-hostable unless you explicitly opt in here.
+paid_apis:
+  use_anthropic_api: true      # Phase 3 highlight selection (the one paid default)
+  use_openai_whisper_api: false
+  use_ayrshare: false
+
+# ── Paths (resolved relative to the clipper/ directory) ──────────────────────
+paths:
+  data_dir: "data"
+  inbox: "data/inbox"          # downloaded source videos
+  ready: "data/ready"          # finished, render-complete shorts
+  work: "data/work"            # scratch space for intermediate render artifacts
+  transcripts: "data/transcripts"
+  ledger_db: "data/ledger.db"

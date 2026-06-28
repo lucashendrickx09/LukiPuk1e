@@ -1,0 +1,33 @@
+# Python dependencies for the YouTube -> Short-Form Clipper.
+# Install:  python3 -m pip install -r requirements.txt
+#
+# Grouped by phase so you only need the early ones to start.
+
+# --- Phase 0: config + ledger (minimal, needed now) ---
+PyYAML>=6.0
+python-dotenv>=1.0
+
+# --- Phase 1: download / channel polling ---
+yt-dlp>=2024.1.0
+
+# --- Phase 2: transcription fallback (whisper.cpp is a separate binary) ---
+faster-whisper>=1.0.0
+
+# --- Phase 3: highlight selection (the brain) ---
+anthropic>=0.40.0
+
+# --- Phase 4: reframe / caption / encode (ffmpeg is a separate binary) ---
+opencv-python>=4.9.0
+numpy>=1.26.0
+Pillow>=10.0.0
+
+# --- Phase 5: posting ---
+requests>=2.31.0
+
+# --- Phase 6: Telegram approval bot ---
+python-telegram-bot>=21.0
+
+# --- Phase 7 (optional): web review UI ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+jinja2>=3.1.0

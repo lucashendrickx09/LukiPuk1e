@@ -1,0 +1,16 @@
+# Secrets — never commit
+.env
+
+# Runtime data (downloads, renders, ledger DB, scratch)
+data/
+
+# Whisper.cpp model weights if you drop them here
+models/*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
