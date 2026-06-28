@@ -13,6 +13,7 @@ Run with no arguments to perform the full startup check (== `doctor`).
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -22,11 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from app import __version__  # noqa: E402
 from app.config import (  # noqa: E402
     PERMISSION_CLEARED,
+    PERMISSION_STATES,
     SECRET_KEYS,
     Config,
     load_config,
 )
-from app import deps, ledger  # noqa: E402
+from app import deps, ingest, ledger  # noqa: E402
+from app.ytdlp import classify_url, make_provider  # noqa: E402
 
 # ---- tiny ANSI helpers (no dependency) ----------------------------------
 _OK = "\033[92m✔\033[0m"
@@ -42,7 +45,7 @@ def _hr(title: str) -> None:
     print(_DIM + "-" * max(8, len(title)) + _RST)
 
 
-def cmd_doctor(cfg: Config) -> int:
+def cmd_doctor(cfg: Config, args: argparse.Namespace) -> int:
     """Verify everything Phase 0 promises and print a setup checklist."""
     problems = 0
 
@@ -119,41 +122,141 @@ def cmd_doctor(cfg: Config) -> int:
     return problems
 
 
+# ===========================================================================
+# Phase 1 — source management + ingest
+# ===========================================================================
+def cmd_source_add(cfg: Config, args: argparse.Namespace) -> int:
+    perm = args.permission.lower()
+    if perm not in PERMISSION_STATES:
+        print(f"{_BAD} --permission must be one of: {', '.join(PERMISSION_STATES)}",
+              file=sys.stderr)
+        return 2
+    stype = args.type if args.type != "auto" else classify_url(args.url)
+    ledger.init_db(cfg.ledger_db)
+    with ledger.session(cfg.ledger_db) as conn:
+        row = ledger.add_source(conn, args.url, stype, perm, note=args.note)
+    cleared = perm in PERMISSION_CLEARED
+    mark = _OK if cleared else _WARN
+    print(f"{mark} source #{row['id']} added: [{perm}] {stype} {args.url}")
+    if not cleared:
+        print(f"  {_WARN} permission '{perm}' is NOT cleared — this source is "
+              f"BLOCKED from the pipeline until you re-add it as "
+              f"owner/licensed/fair_use.")
+    return 0
+
+
+def cmd_source_list(cfg: Config, args: argparse.Namespace) -> int:
+    ledger.init_db(cfg.ledger_db)
+    with ledger.session(cfg.ledger_db) as conn:
+        rows = ledger.list_sources(conn)
+    if not rows:
+        print(f"{_DIM}No sources yet. Add one:  python run.py source add <url> "
+              f"--permission owner{_RST}")
+        return 0
+    print(f"{_BOLD}{'ID':>3}  {'PERM':<10} {'TYPE':<8} {'LAST_SEEN':<13} URL{_RST}")
+    for r in rows:
+        cleared = (r["permission_status"] or "").lower() in PERMISSION_CLEARED
+        mark = _OK if cleared else _BAD
+        last = (r["last_seen_video_id"] or "-")[:11]
+        print(f"{mark}{r['id']:>3}  {r['permission_status']:<10} "
+              f"{r['type']:<8} {last:<13} {r['url']}")
+    return 0
+
+
+def cmd_source_rm(cfg: Config, args: argparse.Namespace) -> int:
+    ledger.init_db(cfg.ledger_db)
+    with ledger.session(cfg.ledger_db) as conn:
+        target = args.source
+        row = (ledger.get_source_by_id(conn, int(target)) if target.isdigit()
+               else ledger.get_source_by_url(conn, target))
+        if row is None:
+            print(f"{_BAD} no source matching '{target}'", file=sys.stderr)
+            return 1
+        ledger.remove_source(conn, row["id"])
+    print(f"{_OK} removed source #{row['id']} {row['url']}")
+    return 0
+
+
+def cmd_ingest(cfg: Config, args: argparse.Namespace) -> int:
+    provider = make_provider(cfg)
+    report = ingest.run_ingest(
+        cfg, provider,
+        only_source=args.source,
+        dry_run=args.dry_run,
+        limit=args.limit,
+    )
+    _hr("Ingest summary" + (" (dry-run)" if args.dry_run else ""))
+    print(f"  {report.line()}")
+    for note in report.notes:
+        print(f"  {_WARN} {note}")
+    # Non-zero only if every scanned source errored with nothing accomplished.
+    if report.errors and report.downloaded == 0 and report.new_videos == 0:
+        return 1
+    return 0
+
+
 def _not_yet(name: str, phase: str):
-    def _runner(cfg: Config) -> int:
-        print(f"`{name}` arrives in {phase}. Phase 0 only ships `doctor`.")
+    def _runner(cfg: Config, args: argparse.Namespace) -> int:
+        print(f"`{name}` arrives in {phase}.")
         return 0
 
     return _runner
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="run.py",
-        description="Automated YouTube -> Short-Form Clipper (Phase 0 scaffold).",
+        description="Automated YouTube -> Short-Form Clipper.",
     )
     parser.add_argument("--version", action="version", version=f"clipper {__version__}")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Debug logging.")
     sub = parser.add_subparsers(dest="command")
-    doctor_p = sub.add_parser(
-        "doctor", help="Verify config/binaries/secrets and init the ledger."
-    )
-    doctor_p.add_argument(
-        "--strict",
-        action="store_true",
-        help="Exit non-zero if any required binary is missing (CI gate).",
-    )
-    # Stubs so the CLI surface is discoverable; implemented in later phases.
-    for name, phase in (
-        ("ingest", "Phase 1"),
-        ("transcribe", "Phase 2"),
-        ("analyze", "Phase 3"),
-        ("render", "Phase 4"),
-        ("publish", "Phase 5"),
-        ("run", "Phase 7"),
-    ):
-        sub.add_parser(name, help=f"({phase})")
 
+    doctor_p = sub.add_parser("doctor", help="Verify config/binaries/secrets; init ledger.")
+    doctor_p.add_argument("--strict", action="store_true",
+                          help="Exit non-zero if any required binary is missing (CI gate).")
+
+    # ---- source <add|list|rm> --------------------------------------------
+    src_p = sub.add_parser("source", help="Manage sources (add/list/rm).")
+    src_sub = src_p.add_subparsers(dest="source_cmd", required=True)
+    add_p = src_sub.add_parser("add", help="Add a video/channel/playlist URL.")
+    add_p.add_argument("url")
+    add_p.add_argument("--permission", required=True,
+                       choices=list(PERMISSION_STATES),
+                       help="REQUIRED. owner/licensed/fair_use are pipeline-cleared; "
+                            "unverified is blocked.")
+    add_p.add_argument("--type", default="auto",
+                       choices=["auto", "video", "channel", "playlist"])
+    add_p.add_argument("--note", default=None)
+    src_sub.add_parser("list", help="List all sources.")
+    rm_p = src_sub.add_parser("rm", help="Remove a source by id or URL.")
+    rm_p.add_argument("source")
+
+    # ---- ingest ----------------------------------------------------------
+    ing_p = sub.add_parser("ingest", help="Download new, un-ledgered videos to /inbox.")
+    ing_p.add_argument("--source", default=None,
+                       help="Limit to one source (id or URL). Default: all.")
+    ing_p.add_argument("--dry-run", action="store_true",
+                       help="Enumerate + ledger new videos, but don't download.")
+    ing_p.add_argument("--limit", type=int, default=None,
+                       help="Max newest items to inspect per source.")
+
+    for name, phase in (("transcribe", "Phase 2"), ("analyze", "Phase 3"),
+                        ("render", "Phase 4"), ("publish", "Phase 5"),
+                        ("run", "Phase 7")):
+        sub.add_parser(name, help=f"({phase})")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
     args = parser.parse_args(argv)
+
+    logging.basicConfig(
+        level=logging.DEBUG if getattr(args, "verbose", False) else logging.INFO,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
     try:
         cfg = load_config()
@@ -162,20 +265,29 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     command = args.command or "doctor"
+    if command == "source":
+        source_handlers = {
+            "add": cmd_source_add,
+            "list": cmd_source_list,
+            "rm": cmd_source_rm,
+        }
+        return source_handlers[args.source_cmd](cfg, args)
+
     handlers = {
         "doctor": cmd_doctor,
-        "ingest": _not_yet("ingest", "Phase 1"),
+        "ingest": cmd_ingest,
         "transcribe": _not_yet("transcribe", "Phase 2"),
         "analyze": _not_yet("analyze", "Phase 3"),
         "render": _not_yet("render", "Phase 4"),
         "publish": _not_yet("publish", "Phase 5"),
         "run": _not_yet("run", "Phase 7"),
     }
-    result = handlers[command](cfg)
+    result = handlers[command](cfg, args)
 
-    if command == "doctor" and getattr(args, "strict", False) and result:
-        return 1
-    return 0
+    if command == "doctor":
+        # doctor's result is a problem count; only --strict turns it into failure.
+        return 1 if (getattr(args, "strict", False) and result) else 0
+    return result or 0
 
 
 if __name__ == "__main__":

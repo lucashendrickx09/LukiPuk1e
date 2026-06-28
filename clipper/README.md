@@ -35,7 +35,10 @@ clipper/
 ├── app/
 │   ├── config.py       # Phase 0 — load config.yaml + .env, resolve paths
 │   ├── ledger.py       # Phase 0 — SQLite ledger (sources/videos/clips/posts)
-│   └── deps.py         # Phase 0 — verify ffmpeg / yt-dlp / whisper.cpp
+│   ├── deps.py         # Phase 0 — verify ffmpeg / yt-dlp / whisper.cpp
+│   ├── ytdlp.py        # Phase 1 — yt-dlp wrapper (enumerate + download)
+│   └── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
+├── tests/              # Phase 1 — offline self-test (fake provider, no network)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
 
@@ -114,7 +117,35 @@ Secrets are **only** ever read from `.env` / the environment — never from
 
 ---
 
-## Run this phase
+## Run — Phase 1 (source management + ingest)
+
+```bash
+# add a source — permission is REQUIRED (owner | licensed | fair_use | unverified)
+python run.py source add "https://www.youtube.com/@SomePodcast" --permission licensed
+python run.py source add "https://youtu.be/VIDEO_ID" --permission owner   # --type auto-detected
+
+python run.py source list                 # see all sources + permission status
+python run.py ingest --dry-run            # enumerate + ledger new videos, no download
+python run.py ingest                      # download new, un-ledgered videos -> data/inbox/
+python run.py source rm 1                 # remove by id or URL
+```
+
+**What you should see:** `source add` echoes the new id; an `unverified` source is
+flagged **BLOCKED** and is skipped by `ingest`. `ingest` enumerates each cleared
+source, records new videos in the ledger, downloads them to `data/inbox/`, and
+advances `last_seen_video_id` for channels. Re-running downloads **nothing new**
+(idempotent). A single failed download is logged and recorded as `status=error`
+without aborting the rest. Sources listed in `config.yaml` are synced into the
+ledger automatically on ingest. Requires `yt-dlp` (+`ffmpeg` for merged formats);
+without them, ingest fails loud with the install command instead of dropping work.
+
+Offline self-test (no network / no yt-dlp needed):
+
+```bash
+python -m unittest tests.test_phase1 -v
+```
+
+## Run — Phase 0 (startup check)
 
 ```bash
 cd clipper
@@ -147,8 +178,8 @@ binary is missing.
 
 | Phase | What it adds |
 |------:|--------------|
-| **0** | ✅ Scaffold, config, ledger, dependency checks *(this phase)* |
-| 1 | Source management + ingest (yt-dlp, channel polling, permission gate) |
+| **0** | ✅ Scaffold, config, ledger, dependency checks |
+| **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) *(this phase)* |
 | 2 | Transcription (whisper.cpp, word-level timestamps) |
 | 3 | Claude picks the clips (strict-JSON highlight selection) |
 | 4 | Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |

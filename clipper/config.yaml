@@ -19,6 +19,12 @@ sources: []
 #     type: channel
 #     permission_status: licensed
 
+# ── Ingest / download (Phase 1) ──────────────────────────────────────────────
+ingest:
+  yt_dlp_bin: "yt-dlp"          # binary name or absolute path
+  yt_dlp_extra_args: []         # e.g. ["--cookies", "cookies.txt"] for age-gated content
+  channel_poll_limit: 25        # max newest items inspected per channel/playlist poll
+
 # ── Clip constraints ─────────────────────────────────────────────────────────
 clip:
   min_seconds: 20

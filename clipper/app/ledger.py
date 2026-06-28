@@ -188,3 +188,131 @@ def counts(db_path: Path | str) -> dict[str, int]:
             except sqlite3.OperationalError:
                 out[table] = 0
     return out
+
+
+# ===========================================================================
+# Data access helpers (Phase 1+). All take an open connection so callers can
+# batch work in one transaction via `session(...)`.
+# ===========================================================================
+
+# ---- sources --------------------------------------------------------------
+def add_source(
+    conn: sqlite3.Connection,
+    url: str,
+    type: str,
+    permission_status: str,
+    note: str | None = None,
+) -> sqlite3.Row:
+    """Insert a source, or update it in place if the URL already exists.
+
+    Re-adding the same URL updates type/permission/note (so you can clear a
+    previously-unverified source) without creating a duplicate row.
+    """
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO sources(url, type, permission_status, status, note, created_at, updated_at)
+        VALUES(?, ?, ?, 'active', ?, ?, ?)
+        ON CONFLICT(url) DO UPDATE SET
+            type = excluded.type,
+            permission_status = excluded.permission_status,
+            note = excluded.note,
+            updated_at = excluded.updated_at
+        """,
+        (url, type, permission_status, note, now, now),
+    )
+    return get_source_by_url(conn, url)  # type: ignore[return-value]
+
+
+def get_source_by_url(conn: sqlite3.Connection, url: str) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM sources WHERE url = ?", (url,)).fetchone()
+
+
+def get_source_by_id(conn: sqlite3.Connection, source_id: int) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
+
+
+def list_sources(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM sources ORDER BY id").fetchall()
+
+
+def remove_source(conn: sqlite3.Connection, source_id: int) -> int:
+    cur = conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
+    return cur.rowcount
+
+
+def set_source_last_seen(
+    conn: sqlite3.Connection, source_id: int, youtube_id: str
+) -> None:
+    conn.execute(
+        "UPDATE sources SET last_seen_video_id = ?, updated_at = ? WHERE id = ?",
+        (youtube_id, utcnow(), source_id),
+    )
+
+
+# ---- videos ---------------------------------------------------------------
+def get_video(conn: sqlite3.Connection, youtube_id: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM videos WHERE youtube_id = ?", (youtube_id,)
+    ).fetchone()
+
+
+def video_exists(conn: sqlite3.Connection, youtube_id: str) -> bool:
+    return get_video(conn, youtube_id) is not None
+
+
+def add_or_get_video(
+    conn: sqlite3.Connection,
+    source_id: int | None,
+    youtube_id: str,
+    url: str,
+    title: str | None = None,
+    duration_sec: float | None = None,
+) -> tuple[sqlite3.Row, bool]:
+    """Idempotent insert keyed on youtube_id. Returns (row, created)."""
+    existing = get_video(conn, youtube_id)
+    if existing is not None:
+        return existing, False
+    now = utcnow()
+    conn.execute(
+        """
+        INSERT INTO videos(source_id, youtube_id, url, title, duration_sec,
+                           status, created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, 'new', ?, ?)
+        """,
+        (source_id, youtube_id, url, title, duration_sec, now, now),
+    )
+    return get_video(conn, youtube_id), True  # type: ignore[return-value]
+
+
+def set_video_status(
+    conn: sqlite3.Connection,
+    youtube_id: str,
+    status: str,
+    *,
+    file_path: str | None = None,
+    transcript_path: str | None = None,
+    error: str | None = None,
+    title: str | None = None,
+    duration_sec: float | None = None,
+) -> None:
+    """Update a video's status and any provided fields. Clears `error` on
+    any non-error status so a resumed job isn't left with a stale message."""
+    fields: list[str] = ["status = ?", "updated_at = ?"]
+    params: list[object] = [status, utcnow()]
+    if file_path is not None:
+        fields.append("file_path = ?"); params.append(file_path)
+    if transcript_path is not None:
+        fields.append("transcript_path = ?"); params.append(transcript_path)
+    if title is not None:
+        fields.append("title = ?"); params.append(title)
+    if duration_sec is not None:
+        fields.append("duration_sec = ?"); params.append(duration_sec)
+    if status == "error":
+        fields.append("error = ?"); params.append(error)
+    else:
+        fields.append("error = NULL")
+    params.append(youtube_id)
+    conn.execute(
+        f"UPDATE videos SET {', '.join(fields)} WHERE youtube_id = ?", params
+    )
