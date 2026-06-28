@@ -28,7 +28,9 @@ from app.config import (  # noqa: E402
     Config,
     load_config,
 )
-from app import analyze, deps, ingest, ledger, publish, render, transcribe  # noqa: E402
+from app import (  # noqa: E402
+    analyze, approve, deps, ingest, ledger, publish, render, transcribe,
+)
 from app.ytdlp import classify_url, make_provider  # noqa: E402
 
 # ---- tiny ANSI helpers (no dependency) ----------------------------------
@@ -255,6 +257,18 @@ def cmd_publish(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+# ===========================================================================
+# Phase 6 — approve (Telegram one-tap loop)
+# ===========================================================================
+def cmd_approve(cfg: Config, args: argparse.Namespace) -> int:
+    report = approve.run_approve(cfg, poll=args.poll)
+    _hr("Approve summary")
+    print(f"  {report.line()}")
+    for note in report.notes:
+        print(f"  {_WARN} {note}")
+    return 1 if report.errors and report.notified == 0 and report.actions == 0 else 0
+
+
 def _not_yet(name: str, phase: str):
     def _runner(cfg: Config, args: argparse.Namespace) -> int:
         print(f"`{name}` arrives in {phase}.")
@@ -329,6 +343,12 @@ def _build_parser() -> argparse.ArgumentParser:
                            help="Schedule APPROVED clips to platforms (no auto-post).")
     pub_p.add_argument("--clip", type=int, default=None, help="Limit to one clip id.")
 
+    # ---- approve ---------------------------------------------------------
+    ap_p = sub.add_parser("approve",
+                          help="Send /ready clips to Telegram and handle approvals.")
+    ap_p.add_argument("--poll", action="store_true",
+                      help="Stay running and long-poll for taps (Ctrl-C to stop).")
+
     for name, phase in (("run", "Phase 7"),):
         sub.add_parser(name, help=f"({phase})")
     return parser
@@ -352,23 +372,30 @@ def main(argv: list[str] | None = None) -> int:
 
     command = args.command or "doctor"
     if command == "source":
-        source_handlers = {
-            "add": cmd_source_add,
-            "list": cmd_source_list,
-            "rm": cmd_source_rm,
-        }
-        return source_handlers[args.source_cmd](cfg, args)
+        handler = {"add": cmd_source_add, "list": cmd_source_list,
+                   "rm": cmd_source_rm}[args.source_cmd]
+    else:
+        handler = {
+            "doctor": cmd_doctor,
+            "ingest": cmd_ingest,
+            "transcribe": cmd_transcribe,
+            "analyze": cmd_analyze,
+            "render": cmd_render,
+            "publish": cmd_publish,
+            "approve": cmd_approve,
+            "run": _not_yet("run", "Phase 7"),
+        }[command]
 
-    handlers = {
-        "doctor": cmd_doctor,
-        "ingest": cmd_ingest,
-        "transcribe": cmd_transcribe,
-        "analyze": cmd_analyze,
-        "render": cmd_render,
-        "publish": cmd_publish,
-        "run": _not_yet("run", "Phase 7"),
-    }
-    result = handlers[command](cfg, args)
+    try:
+        result = handler(cfg, args)
+    except KeyboardInterrupt:
+        print("\ninterrupted.", file=sys.stderr)
+        return 130
+    except Exception as exc:  # fail loud, but cleanly (Hard Rule 4)
+        if getattr(args, "verbose", False):
+            raise
+        print(f"{_BAD} {command} failed: {exc}", file=sys.stderr)
+        return 2
 
     if command == "doctor":
         # doctor's result is a problem count; only --strict turns it into failure.

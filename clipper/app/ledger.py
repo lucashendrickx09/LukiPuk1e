@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 3  # v2 adds transcripts (Phase 2); v3 adds clips.error (Phase 4)
+SCHEMA_VERSION = 4  # v2 transcripts; v3 clips.error; v4 clips.review_message_id (P6)
 
 # Status vocabularies, exported so other phases use the same strings.
 SOURCE_STATUS = ("active", "paused", "blocked")
@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS clips (
     status           TEXT NOT NULL DEFAULT 'candidate',
     rejected_reason  TEXT,
     error            TEXT,                                 -- render failure message (Phase 4)
+    review_message_id TEXT,                                -- Telegram review msg id (Phase 6)
     file_path        TEXT,                                 -- in /ready once rendered
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL
@@ -168,6 +169,8 @@ def init_db(db_path: Path | str) -> bool:
         clip_cols = {r[1] for r in conn.execute("PRAGMA table_info(clips)")}
         if "error" not in clip_cols:  # v2 -> v3
             conn.execute("ALTER TABLE clips ADD COLUMN error TEXT")
+        if "review_message_id" not in clip_cols:  # v3 -> v4
+            conn.execute("ALTER TABLE clips ADD COLUMN review_message_id TEXT")
         conn.execute(
             "INSERT INTO meta(key, value) VALUES('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -537,4 +540,52 @@ def upsert_post(
             updated_at = excluded.updated_at
         """,
         (clip_id, platform, scheduled_for, external_id, status, error, now, now),
+    )
+
+
+# ---- approval / review (Phase 6) ------------------------------------------
+def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO meta(key, value) VALUES(?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, str(value)),
+    )
+
+
+def del_meta(conn: sqlite3.Connection, key: str) -> None:
+    conn.execute("DELETE FROM meta WHERE key = ?", (key,))
+
+
+def list_clips_for_review(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Rendered clips awaiting a first review notification."""
+    return conn.execute(
+        "SELECT * FROM clips WHERE status = 'ready' AND review_message_id IS NULL "
+        "ORDER BY id"
+    ).fetchall()
+
+
+def set_clip_review_message(conn: sqlite3.Connection, clip_id: int, message_id) -> None:
+    conn.execute(
+        "UPDATE clips SET review_message_id = ?, updated_at = ? WHERE id = ?",
+        (str(message_id), utcnow(), clip_id),
+    )
+
+
+def set_clip_caption(conn: sqlite3.Connection, clip_id: int, caption: str) -> None:
+    conn.execute(
+        "UPDATE clips SET caption = ?, updated_at = ? WHERE id = ?",
+        (caption, utcnow(), clip_id),
+    )
+
+
+def reject_clip(conn: sqlite3.Connection, clip_id: int, reason: str) -> None:
+    conn.execute(
+        "UPDATE clips SET status = 'rejected', rejected_reason = ?, updated_at = ? "
+        "WHERE id = ?",
+        (reason, utcnow(), clip_id),
     )

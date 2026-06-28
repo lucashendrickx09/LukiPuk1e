@@ -41,7 +41,8 @@ clipper/
 │   ├── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
 │   ├── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
 │   ├── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
-│   └── publish.py      # Phase 5 — Publisher interface, Postiz, scheduling, gate
+│   ├── publish.py      # Phase 5 — Publisher interface, Postiz, scheduling, gate
+│   └── approve.py      # Phase 6 — Telegram one-tap approval loop
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
@@ -120,6 +121,34 @@ Secrets are **only** ever read from `.env` / the environment — never from
 `config.yaml`, never hardcoded.
 
 ---
+
+## Run — Phase 6 (Telegram approval)
+
+```bash
+python run.py approve              # one pass: notify new /ready clips + handle taps
+python run.py approve --poll       # stay running, long-poll for taps (Ctrl-C to stop)
+```
+
+**What you should see:** each `ready` clip is sent to your Telegram once (preview
+video + title/caption/hashtags + hook_score + **source permission status**) with
+inline buttons **✅ Approve & schedule | ✏️ Edit caption | ❌ Reject**:
+- **Approve** → clip `approved` and handed to the Phase 5 publisher (spaced
+  schedule). **Reject** → archived (`rejected`) with a logged reason. **Edit** →
+  reply with new caption text; it's applied, then approved + scheduled.
+
+This is the gate that makes **Rule 2** real — clips never leave `ready` without a
+tap. Notifications are idempotent (each clip sent once), and the update offset is
+persisted so taps aren't re-processed. Run it from cron for one pass, or `--poll`
+on a small box to clear the day's queue in under a minute from your phone.
+
+Needs a Telegram bot: create one via @BotFather → `TELEGRAM_BOT_TOKEN`, and your
+`TELEGRAM_CHAT_ID`, both in `.env`. Set `telegram.enabled: false` to disable.
+
+Offline self-test (message/keyboard/callbacks + approve/reject/edit flows):
+
+```bash
+python -m unittest tests.test_phase6 -v
+```
 
 ## Run — Phase 5 (publish)
 
@@ -298,8 +327,8 @@ binary is missing.
 | **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) |
 | **3** | ✅ Claude picks the clips (strict-JSON highlight selection) |
 | **4** | ✅ Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
-| **5** | ✅ Posting abstraction (Postiz publisher, scheduling, permission gate) *(this phase)* |
-| 6 | One-tap Telegram approval loop |
+| **5** | ✅ Posting abstraction (Postiz publisher, scheduling, permission gate) |
+| **6** | ✅ One-tap Telegram approval loop *(this phase)* |
 | 7 | End-to-end run loop + daily reporting |
 
 Each phase stops and shows you what runs before the next begins.
