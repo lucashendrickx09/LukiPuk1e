@@ -384,3 +384,61 @@ def get_transcript(conn: sqlite3.Connection, video_id: int) -> sqlite3.Row | Non
     return conn.execute(
         "SELECT * FROM transcripts WHERE video_id = ?", (video_id,)
     ).fetchone()
+
+
+# ---- clips (Phase 3) ------------------------------------------------------
+def add_clip(
+    conn: sqlite3.Connection,
+    video_id: int,
+    *,
+    start_sec: float,
+    end_sec: float,
+    title: str | None,
+    caption: str | None,
+    hashtags_json: str | None,
+    hook_score: int | None,
+    reason: str | None,
+    status: str,
+    rejected_reason: str | None = None,
+) -> int:
+    now = utcnow()
+    cur = conn.execute(
+        """
+        INSERT INTO clips(video_id, start_sec, end_sec, title, caption, hashtags,
+                          hook_score, reason, status, rejected_reason,
+                          created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (video_id, start_sec, end_sec, title, caption, hashtags_json, hook_score,
+         reason, status, rejected_reason, now, now),
+    )
+    return int(cur.lastrowid)
+
+
+def list_clips(
+    conn: sqlite3.Connection,
+    video_id: int | None = None,
+    status: str | None = None,
+) -> list[sqlite3.Row]:
+    q = "SELECT * FROM clips"
+    where: list[str] = []
+    params: list[object] = []
+    if video_id is not None:
+        where.append("video_id = ?"); params.append(video_id)
+    if status is not None:
+        where.append("status = ?"); params.append(status)
+    if where:
+        q += " WHERE " + " AND ".join(where)
+    q += " ORDER BY id"
+    return conn.execute(q, params).fetchall()
+
+
+def delete_unrendered_clips(conn: sqlite3.Connection, video_id: int) -> int:
+    """Remove candidate/rejected clips for a video so it can be re-analyzed.
+    Clips that have advanced past selection (cutting/ready/approved/posted) are
+    kept so we never orphan downstream work."""
+    cur = conn.execute(
+        "DELETE FROM clips WHERE video_id = ? AND status IN ('candidate', 'rejected')",
+        (video_id,),
+    )
+    return cur.rowcount

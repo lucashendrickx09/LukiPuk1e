@@ -35,9 +35,14 @@ clip:
 # ── Highlight selection (Claude — the brain, Phase 3) ────────────────────────
 claude:
   model: "claude-opus-4-8"      # configurable Claude model string
-  temperature: 0.4
+  max_tokens: 16000
   max_transcript_chars: 60000   # chunk transcripts longer than this
   max_candidates_per_video: 12
+  # Optional, only on models that support them (Opus 4.6+/Sonnet 4.6/Fable 5).
+  # Leave unset for max compatibility. Note: temperature/top_p are NOT sent —
+  # current Opus models reject them.
+  thinking: null                # e.g. "adaptive"
+  effort: null                  # e.g. "low" | "medium" | "high"
 
 # ── Transcription (Phase 2) ──────────────────────────────────────────────────
 transcription:

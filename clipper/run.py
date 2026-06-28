@@ -28,7 +28,7 @@ from app.config import (  # noqa: E402
     Config,
     load_config,
 )
-from app import deps, ingest, ledger, transcribe  # noqa: E402
+from app import analyze, deps, ingest, ledger, transcribe  # noqa: E402
 from app.ytdlp import classify_url, make_provider  # noqa: E402
 
 # ---- tiny ANSI helpers (no dependency) ----------------------------------
@@ -211,6 +211,22 @@ def cmd_transcribe(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+# ===========================================================================
+# Phase 3 — analyze (Claude picks the clips)
+# ===========================================================================
+def cmd_analyze(cfg: Config, args: argparse.Namespace) -> int:
+    report = analyze.run_analyze(
+        cfg, only_video=args.video, force=args.force, dry_run=args.dry_run,
+    )
+    _hr("Analyze summary" + (" (dry-run)" if args.dry_run else ""))
+    print(f"  {report.line()}")
+    for note in report.notes:
+        print(f"  {_WARN} {note}")
+    if report.errors and report.analyzed == 0:
+        return 1
+    return 0
+
+
 def _not_yet(name: str, phase: str):
     def _runner(cfg: Config, args: argparse.Namespace) -> int:
         print(f"`{name}` arrives in {phase}.")
@@ -264,8 +280,17 @@ def _build_parser() -> argparse.ArgumentParser:
     tr_p.add_argument("--force", action="store_true",
                       help="Re-transcribe even if already done.")
 
-    for name, phase in (("analyze", "Phase 3"), ("render", "Phase 4"),
-                        ("publish", "Phase 5"), ("run", "Phase 7")):
+    # ---- analyze ---------------------------------------------------------
+    an_p = sub.add_parser("analyze",
+                          help="Claude picks clip candidates from transcripts.")
+    an_p.add_argument("--video", default=None, help="Limit to one youtube_id.")
+    an_p.add_argument("--force", action="store_true",
+                      help="Re-analyze even if already done (drops prior candidates).")
+    an_p.add_argument("--dry-run", action="store_true",
+                      help="Call Claude and print picks, but don't write to the ledger.")
+
+    for name, phase in (("render", "Phase 4"), ("publish", "Phase 5"),
+                        ("run", "Phase 7")):
         sub.add_parser(name, help=f"({phase})")
     return parser
 
@@ -299,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
         "doctor": cmd_doctor,
         "ingest": cmd_ingest,
         "transcribe": cmd_transcribe,
-        "analyze": _not_yet("analyze", "Phase 3"),
+        "analyze": cmd_analyze,
         "render": _not_yet("render", "Phase 4"),
         "publish": _not_yet("publish", "Phase 5"),
         "run": _not_yet("run", "Phase 7"),

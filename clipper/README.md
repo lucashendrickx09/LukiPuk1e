@@ -38,7 +38,8 @@ clipper/
 │   ├── deps.py         # Phase 0 — verify ffmpeg / yt-dlp / whisper.cpp
 │   ├── ytdlp.py        # Phase 1 — yt-dlp wrapper (enumerate + download)
 │   ├── ingest.py       # Phase 1 — source mgmt + ingest (permission gate, dedupe)
-│   └── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
+│   ├── transcribe.py   # Phase 2 — whisper.cpp / faster-whisper word-level transcripts
+│   └── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
@@ -117,6 +118,34 @@ Secrets are **only** ever read from `.env` / the environment — never from
 `config.yaml`, never hardcoded.
 
 ---
+
+## Run — Phase 3 (Claude picks the clips)
+
+```bash
+python run.py analyze                       # analyze all transcribed videos
+python run.py analyze --video VIDEO_ID --dry-run   # one video, print picks, don't save
+python run.py analyze --force               # re-analyze (drops prior candidates)
+```
+
+**What you should see:** Claude reads each transcript and returns candidate clips
+(`start/end/title/caption/hashtags/hook_score/reason`). Clips scoring **≥
+`hook_score_threshold`** (default 7) are stored as `candidate`; the rest are
+stored as `rejected` with the reason. Cut points are snapped to whole-word
+boundaries and clamped to the configured length, the video moves
+`transcribed → analyzed`, and re-running does nothing unless `--force`. Output is
+parsed defensively (code fences stripped, JSON validated) with one automatic
+retry; persistent bad output is recorded as `status=error` and the run continues.
+
+This is the first **paid** step: set `paid_apis.use_anthropic_api: true` in
+`config.yaml` and `ANTHROPIC_API_KEY` in `.env`. The model is configurable
+(`claude.model`, default `claude-opus-4-8`). On an empty queue it no-ops without
+needing a key.
+
+Offline self-test (defensive parsing, gating, snapping, idempotency — no API):
+
+```bash
+python -m unittest tests.test_phase3 -v
+```
 
 ## Run — Phase 2 (transcribe)
 
@@ -207,8 +236,8 @@ binary is missing.
 |------:|--------------|
 | **0** | ✅ Scaffold, config, ledger, dependency checks |
 | **1** | ✅ Source management + ingest (yt-dlp, channel polling, permission gate) |
-| **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) *(this phase)* |
-| 3 | Claude picks the clips (strict-JSON highlight selection) |
+| **2** | ✅ Transcription (whisper.cpp / faster-whisper, word-level timestamps) |
+| **3** | ✅ Claude picks the clips (strict-JSON highlight selection) *(this phase)* |
 | 4 | Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
 | 5 | Posting abstraction (Postiz publisher, scheduling) |
 | 6 | One-tap Telegram approval loop |
