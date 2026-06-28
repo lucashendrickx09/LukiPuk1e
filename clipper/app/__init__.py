@@ -7,8 +7,13 @@ easy to follow:
              ledger.py   -> SQLite ledger (sources/videos/clips/posts)
              deps.py     -> external binary verification (ffmpeg, yt-dlp, ...)
 
-Later phases (ingest, transcribe, analyze, render, publish, approve) plug in
-as additional modules without changing the Phase 0 foundation.
+Later phases plug in as additional modules without changing the Phase 0
+foundation:
+
+    Phase 1  ytdlp.py / ingest.py   Phase 4  render.py
+    Phase 2  transcribe.py          Phase 5  publish.py
+    Phase 3  analyze.py             Phase 6  approve.py
+                                    Phase 7  pipeline.py (run loop)
 """
 
-__version__ = "0.1.0"  # Phase 0
+__version__ = "1.0.0"  # all phases complete

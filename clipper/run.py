@@ -29,7 +29,7 @@ from app.config import (  # noqa: E402
     load_config,
 )
 from app import (  # noqa: E402
-    analyze, approve, deps, ingest, ledger, publish, render, transcribe,
+    analyze, approve, deps, ingest, ledger, pipeline, publish, render, transcribe,
 )
 from app.ytdlp import classify_url, make_provider  # noqa: E402
 
@@ -269,12 +269,26 @@ def cmd_approve(cfg: Config, args: argparse.Namespace) -> int:
     return 1 if report.errors and report.notified == 0 and report.actions == 0 else 0
 
 
-def _not_yet(name: str, phase: str):
-    def _runner(cfg: Config, args: argparse.Namespace) -> int:
-        print(f"`{name}` arrives in {phase}.")
-        return 0
-
-    return _runner
+# ===========================================================================
+# Phase 7 — run (end-to-end chain) + reporting
+# ===========================================================================
+def cmd_run(cfg: Config, args: argparse.Namespace) -> int:
+    skip = frozenset(s.strip() for s in (args.skip or "").split(",") if s.strip())
+    report = pipeline.run_all(cfg, skip=skip, send_summary=not args.no_summary)
+    _hr("Run summary")
+    for name in pipeline.STEP_ORDER:
+        line = report.line(name)
+        if line is not None:
+            print(f"  {_OK} {name:<11} {line}")
+        elif name in skip:
+            print(f"  {_DIM}- {name:<11} (skipped){_RST}")
+        else:
+            print(f"  {_BAD} {name:<11} (failed — see errors)")
+    if report.summary_sent:
+        print(f"  {_DIM}daily summary sent.{_RST}")
+    for err in report.errors:
+        print(f"  {_WARN} {err}")
+    return 1 if report.errors and not report.steps else 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -349,8 +363,14 @@ def _build_parser() -> argparse.ArgumentParser:
     ap_p.add_argument("--poll", action="store_true",
                       help="Stay running and long-poll for taps (Ctrl-C to stop).")
 
-    for name, phase in (("run", "Phase 7"),):
-        sub.add_parser(name, help=f"({phase})")
+    # ---- run (end-to-end) ------------------------------------------------
+    run_p = sub.add_parser("run",
+                           help="Run the whole chain end-to-end (cron-friendly).")
+    run_p.add_argument("--skip", default=None,
+                       help="Comma-separated steps to skip "
+                            "(ingest,transcribe,analyze,render,approve,publish).")
+    run_p.add_argument("--no-summary", action="store_true",
+                       help="Don't send the daily Telegram summary.")
     return parser
 
 
@@ -383,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
             "render": cmd_render,
             "publish": cmd_publish,
             "approve": cmd_approve,
-            "run": _not_yet("run", "Phase 7"),
+            "run": cmd_run,
         }[command]
 
     try:

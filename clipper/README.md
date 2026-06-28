@@ -5,7 +5,8 @@ links **or** whole channels it monitors) into algorithm-optimized vertical
 shorts with animated captions, then queues them for **one-tap phone approval**
 before posting to Instagram Reels, YouTube Shorts, and TikTok.
 
-Built incrementally, phase by phase. **This is Phase 0 — scaffold & config.**
+Built incrementally, phase by phase. **All 7 phases are complete** — run the
+whole chain with `python run.py run` (see below).
 
 ---
 
@@ -42,7 +43,8 @@ clipper/
 │   ├── analyze.py      # Phase 3 — Claude picks clip candidates (strict JSON)
 │   ├── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
 │   ├── publish.py      # Phase 5 — Publisher interface, Postiz, scheduling, gate
-│   └── approve.py      # Phase 6 — Telegram one-tap approval loop
+│   ├── approve.py      # Phase 6 — Telegram one-tap approval loop
+│   └── pipeline.py     # Phase 7 — end-to-end run loop + daily summary
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
@@ -121,6 +123,75 @@ Secrets are **only** ever read from `.env` / the environment — never from
 `config.yaml`, never hardcoded.
 
 ---
+
+## Run — Phase 7 (the whole chain) ⭐
+
+```bash
+python run.py run                       # ingest -> transcribe -> analyze -> render -> approve -> publish
+python run.py run --skip ingest,publish # run a subset
+python run.py run --no-summary          # skip the daily Telegram summary
+```
+
+**What you should see:** a one-line status per step. Every step is idempotent and
+operates on whatever the ledger holds, so `run` is **safe to invoke repeatedly**
+(cron-friendly) — nothing is re-downloaded, re-clipped, or re-posted. A step that
+fails (e.g. a missing API key for one stage) is reported and the chain
+**continues** — later stages still process whatever earlier runs produced. Once
+per day it sends a Telegram summary (videos scanned, clips made, posted,
+rejected, errors).
+
+The flow stops at **approval** by design: `run` renders clips to `/ready` and
+sends them to Telegram, but they only post after you tap ✅ (Rule 2). Run it on a
+schedule and clear the queue from your phone whenever you like.
+
+### Cron
+
+```cron
+# hourly, from the clipper/ directory, with .env loaded
+0 * * * * cd /path/to/clipper && /path/to/clipper/.venv/bin/python run.py run >> data/run.log 2>&1
+```
+
+### GitHub Actions (example)
+
+`.github/workflows/clipper.yml` — illustrative; see the caveat below.
+
+```yaml
+name: clipper
+on:
+  schedule: [{ cron: "0 * * * *" }]   # hourly
+  workflow_dispatch: {}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: clipper } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r requirements.txt
+      # ledger + downloads must persist between runs for idempotency:
+      - uses: actions/cache@v4
+        with: { path: clipper/data, key: clipper-data }
+      - run: python run.py run
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          POSTIZ_API_KEY:     ${{ secrets.POSTIZ_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+```
+
+> ⚠️ GitHub Actions runners are ephemeral. The SQLite **ledger and downloads in
+> `data/` must persist** between runs or idempotency breaks — the cache step above
+> is a best-effort approximation. For production, prefer a small always-on box
+> with cron (or persist `data/` to real storage). Use `faster-whisper`
+> (`transcription.engine`) in CI to avoid building whisper.cpp.
+
+Offline self-test (full chain with fakes — idempotency, isolation, summary):
+
+```bash
+python -m unittest tests.test_phase7 -v
+```
 
 ## Run — Phase 6 (Telegram approval)
 
@@ -328,7 +399,8 @@ binary is missing.
 | **3** | ✅ Claude picks the clips (strict-JSON highlight selection) |
 | **4** | ✅ Cut, reframe (OpenCV 16:9→9:16), animated captions, encode |
 | **5** | ✅ Posting abstraction (Postiz publisher, scheduling, permission gate) |
-| **6** | ✅ One-tap Telegram approval loop *(this phase)* |
-| 7 | End-to-end run loop + daily reporting |
+| **6** | ✅ One-tap Telegram approval loop |
+| **7** | ✅ End-to-end run loop + daily reporting *(this phase)* |
 
-Each phase stops and shows you what runs before the next begins.
+All phases complete. `python run.py run` chains them end-to-end; `python run.py
+doctor` checks your setup.
