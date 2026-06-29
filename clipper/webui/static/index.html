@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Clipper</title>
+  <meta name="theme-color" content="#0f1115" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <!-- iOS "Add to Home Screen" makes this a full-screen web app -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Clipper" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+  <link rel="icon" href="/static/icon-192.png" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>🎬 Clipper</h1>
+    <span id="statusPill" class="pill">…</span>
+  </header>
+
+  <main>
+    <!-- REVIEW -->
+    <section id="tab-review" class="tab active">
+      <p class="muted" id="reviewEmpty" hidden>No clips waiting for review. Run the pipeline to make some.</p>
+      <div id="reviewList"></div>
+    </section>
+
+    <!-- RUN -->
+    <section id="tab-run" class="tab">
+      <div id="jobStatus" class="jobstatus muted">idle</div>
+      <div class="grid">
+        <button class="step" data-step="run">▶ Run all</button>
+        <button class="step" data-step="ingest">⬇ Ingest</button>
+        <button class="step" data-step="transcribe">🗣 Transcribe</button>
+        <button class="step" data-step="analyze">🧠 Analyze</button>
+        <button class="step" data-step="render">✂ Render</button>
+        <button class="step" data-step="publish">📤 Publish</button>
+      </div>
+      <h3>Ledger</h3>
+      <div id="counts" class="counts"></div>
+    </section>
+
+    <!-- SOURCES -->
+    <section id="tab-sources" class="tab">
+      <form id="addSource" class="card">
+        <input id="srcUrl" type="url" placeholder="YouTube video / channel / playlist URL" required />
+        <div class="row">
+          <select id="srcType">
+            <option value="auto">auto-detect type</option>
+            <option value="video">video</option>
+            <option value="channel">channel</option>
+            <option value="playlist">playlist</option>
+          </select>
+          <select id="srcPerm">
+            <option value="owner">owner</option>
+            <option value="licensed">licensed</option>
+            <option value="fair_use">fair_use</option>
+            <option value="unverified">unverified</option>
+          </select>
+        </div>
+        <button type="submit">Add source</button>
+        <p class="muted small">Only owner / licensed / fair_use sources enter the pipeline.</p>
+      </form>
+      <div id="sourceList"></div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="review" class="active">Review</button>
+    <button data-tab="run">Run</button>
+    <button data-tab="sources">Sources</button>
+  </nav>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

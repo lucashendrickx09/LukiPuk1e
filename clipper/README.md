@@ -44,12 +44,104 @@ clipper/
 │   ├── render.py       # Phase 4 — ffmpeg cut + OpenCV reframe + karaoke captions
 │   ├── publish.py      # Phase 5 — Publisher interface, Postiz, scheduling, gate
 │   ├── approve.py      # Phase 6 — Telegram one-tap approval loop
-│   └── pipeline.py     # Phase 7 — end-to-end run loop + daily summary
+│   ├── pipeline.py     # Phase 7 — end-to-end run loop + daily summary
+│   └── webui.py        # Mobile web dashboard / approval server (FastAPI)
+├── webui/static/       # the phone dashboard (HTML/CSS/JS + PWA manifest/icons)
 ├── tests/              # offline self-tests (fakes, no network/binaries needed)
 └── data/               # created at runtime (gitignored): inbox/, ready/, ledger.db, ...
 ```
 
 Modules are named by phase so you can follow the pipeline as it grows.
+
+---
+
+## 📱 Use it from your phone (web dashboard + Tailscale)
+
+The heavy work (download, transcription, ffmpeg) runs on a computer — your phone
+is a remote control. `python run.py webui` serves a phone-friendly dashboard that
+can run every task and review/approve clips (video preview + Approve / Edit
+caption / Reject). Add it to your home screen and it behaves like an app. The
+same backend runs unchanged on **Mac now** and **Windows later** — only Tailscale
+differs per OS.
+
+### A. Set it up on your Mac (do this first)
+
+1. **Install the tools**
+   ```bash
+   brew install ffmpeg yt-dlp          # https://brew.sh if you don't have brew
+   git clone https://github.com/lucashendrickx09/LukiPuk1e.git
+   cd LukiPuk1e/clipper
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. **Configure** — in `config.yaml` set `transcription.engine: faster-whisper`
+   (no whisper.cpp build), then add a source you have rights to:
+   ```bash
+   python run.py source add "https://youtube.com/watch?v=…" --permission owner
+   ```
+   Create `.env` (`cp .env.example .env`) and add `ANTHROPIC_API_KEY` (needed for
+   the analyze step). Postiz/Telegram keys are optional and only needed to
+   actually post — you can review and approve without them.
+
+3. **Install Tailscale** on the Mac and on your phone — it's a free private
+   network so your phone can reach the Mac from anywhere (any Wi-Fi or cellular),
+   no public exposure.
+   - Mac + iOS/Android apps: <https://tailscale.com/download>
+   - Sign in with the **same account** on both, then on the Mac run `tailscale ip -4`
+     and note the address (looks like `100.x.y.z`).
+
+4. **Start the dashboard**
+   ```bash
+   python run.py webui            # serves on 0.0.0.0:8765
+   ```
+
+5. **Open it on your phone** → `http://100.x.y.z:8765` (your Mac's Tailscale IP).
+   - **iPhone (Safari):** Share → **Add to Home Screen** → you get a full-screen
+     app icon.
+   - **Android (Chrome):** menu → **Install app / Add to Home screen**.
+
+6. **Use it:** the **Review** tab shows rendered clips with a video preview and
+   Approve / Edit caption / Reject. The **Run** tab has buttons for each step
+   (or ▶ Run all) and live ledger counts. The **Sources** tab adds/removes
+   sources. Tapping Approve schedules the clip (Postiz) — nothing posts without
+   your tap.
+
+7. **Keep it running** so your phone can reach it anytime. Quick: leave the
+   terminal open, or `nohup python run.py webui &`. As a proper background
+   service on macOS, create a `launchd` plist (or run `python run.py run` from
+   cron hourly to keep the pipeline moving and `webui` separately for the UI).
+
+### B. Move it to a Windows PC later
+
+Same backend, same commands — only the install differs:
+
+1. Install **Python 3.11** (<https://www.python.org/downloads/>), **ffmpeg** and
+   **yt-dlp** (e.g. `winget install Gyan.FFmpeg yt-dlp.yt-dlp`, or
+   <https://www.gyan.dev/ffmpeg/builds/>), and **Tailscale for Windows**
+   (<https://tailscale.com/download/windows>).
+2. ```powershell
+   git clone https://github.com/lucashendrickx09/LukiPuk1e.git
+   cd LukiPuk1e\clipper
+   py -3.11 -m venv .venv; .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   copy .env.example .env        # then edit it
+   python run.py webui
+   ```
+3. Open `http://<windows-tailscale-ip>:8765` on your phone (the home-screen icon
+   keeps working — just the IP changes). To keep it always-on, run it with **Task
+   Scheduler** (at logon) or as a service via **NSSM** (<https://nssm.cc/>).
+
+> 🔐 **Security:** binding `0.0.0.0` is fine on Tailscale (only your own devices
+> can reach it). If you ever use a public tunnel instead, set a `webui.token` in
+> `config.yaml` (or `CLIPPER_WEB_TOKEN` in `.env`) — the dashboard will then
+> require it. Don't expose port 8765 to the open internet without a token.
+
+> Useful links: Tailscale <https://tailscale.com/download> · ffmpeg
+> <https://ffmpeg.org/download.html> · yt-dlp
+> <https://github.com/yt-dlp/yt-dlp#installation> · faster-whisper
+> <https://github.com/SYSTRAN/faster-whisper> · Anthropic console
+> <https://console.anthropic.com> · Postiz <https://postiz.com>.
 
 ---
 

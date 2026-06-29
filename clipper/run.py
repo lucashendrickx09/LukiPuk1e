@@ -29,7 +29,8 @@ from app.config import (  # noqa: E402
     load_config,
 )
 from app import (  # noqa: E402
-    analyze, approve, deps, ingest, ledger, pipeline, publish, render, transcribe,
+    analyze, approve, deps, ingest, ledger, pipeline, publish, render,
+    transcribe, webui,
 )
 from app.ytdlp import classify_url, make_provider  # noqa: E402
 
@@ -291,6 +292,14 @@ def cmd_run(cfg: Config, args: argparse.Namespace) -> int:
     return 1 if report.errors and not report.steps else 0
 
 
+# ===========================================================================
+# Web UI — mobile dashboard / approval server
+# ===========================================================================
+def cmd_webui(cfg: Config, args: argparse.Namespace) -> int:
+    webui.serve(cfg, host=args.host, port=args.port)  # blocks (Ctrl-C to stop)
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="run.py",
@@ -371,6 +380,12 @@ def _build_parser() -> argparse.ArgumentParser:
                             "(ingest,transcribe,analyze,render,approve,publish).")
     run_p.add_argument("--no-summary", action="store_true",
                        help="Don't send the daily Telegram summary.")
+
+    # ---- webui -----------------------------------------------------------
+    web_p = sub.add_parser("webui",
+                           help="Serve the mobile web dashboard / approval UI.")
+    web_p.add_argument("--host", default=None, help="Bind host (default 0.0.0.0).")
+    web_p.add_argument("--port", type=int, default=None, help="Bind port (default 8765).")
     return parser
 
 
@@ -404,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
             "publish": cmd_publish,
             "approve": cmd_approve,
             "run": cmd_run,
+            "webui": cmd_webui,
         }[command]
 
     try:

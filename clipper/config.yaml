@@ -119,6 +119,15 @@ paid_apis:
   use_openai_whisper_api: false
   use_ayrshare: false
 
+# ── Web UI (mobile dashboard / approval, `python run.py webui`) ──────────────
+webui:
+  host: "0.0.0.0"              # bind all interfaces so your phone can reach it
+  port: 8765
+  token: null                 # optional shared secret; if set, the UI requires it.
+                              # On a private Tailscale network you can leave it null;
+                              # turn it on for the public-tunnel option.
+                              # Can also be set via .env -> CLIPPER_WEB_TOKEN.
+
 # ── Paths (resolved relative to the clipper/ directory) ──────────────────────
 paths:
   data_dir: "data"
