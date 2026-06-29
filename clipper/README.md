@@ -112,6 +112,29 @@ differs per OS.
    service on macOS, create a `launchd` plist (or run `python run.py run` from
    cron hourly to keep the pipeline moving and `webui` separately for the UI).
 
+### A′. No Tailscale yet? Use the same Wi-Fi (works today)
+
+The dashboard already serves on your whole network, so you can skip Tailscale for
+now and just reach the Mac by its **local address** — the only catch is your
+phone must be on the **same Wi-Fi** (not cellular, not a guest network).
+
+1. On the Mac, get its address (pick either):
+   ```bash
+   scutil --get LocalHostName        # e.g. "Lucass-MacBook-Air"  -> use the .local name (most stable)
+   ipconfig getifaddr en0            # e.g. "192.168.1.42"        -> the raw IP (try en1 if blank)
+   ```
+2. `python run.py webui`
+3. On your phone (same Wi-Fi) open **`http://Lucass-MacBook-Air.local:8765`**
+   (the `.local` name) or **`http://192.168.1.42:8765`** (the IP) → Add to Home Screen.
+4. If it won't load: in **System Settings → Network → Firewall**, allow incoming
+   connections (or approve the prompt when the server starts); confirm both
+   devices are on the same network.
+
+The `.local` name survives reboots/IP changes; a raw IP can change when your
+router hands out a new lease (reserve a static IP in your router to pin it).
+**When you get Tailscale**, do step A.3 above and just use the Tailscale IP
+instead — same home-screen icon, now reachable from anywhere.
+
 ### B. Move it to a Windows PC later
 
 Same backend, same commands — only the install differs:
