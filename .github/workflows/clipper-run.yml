@@ -1,0 +1,66 @@
+name: clipper-run
+
+# Runs the full pipeline (ingest -> transcribe -> analyze -> render -> approve
+# -> publish) on a schedule. Clips still require your one-tap Telegram approval
+# before anything posts (Hard Rule 2) — this job just keeps the queue moving.
+#
+# ── BEFORE USING ────────────────────────────────────────────────────────────
+# 1. Add repo Secrets (Settings -> Secrets and variables -> Actions):
+#       ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, POSTIZ_API_KEY
+# 2. In clipper/config.yaml set:  transcription.engine: faster-whisper
+#    (so CI doesn't have to build whisper.cpp), and add your source(s) +
+#    Postiz channel ids.
+#
+# ── CAVEAT: state persistence ───────────────────────────────────────────────
+# GitHub runners are ephemeral. The SQLite ledger + downloads in clipper/data/
+# MUST persist between runs or idempotency breaks (things get re-processed).
+# The cache step below is best-effort (latest-run-wins via restore-keys) and is
+# NOT safe for overlapping runs — the concurrency guard serialises them. For
+# anything serious, prefer a small always-on box with cron; this workflow is the
+# convenience option, not the robust one.
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # hourly (UTC)
+  workflow_dispatch: {}    # manual "Run workflow" button
+
+# Never let two runs overlap (they'd race on the ledger/cache).
+concurrency:
+  group: clipper-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clipper
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python deps
+        run: python -m pip install --upgrade pip -r requirements.txt
+
+      # Persist the ledger + downloads across runs (best-effort; see caveat above).
+      - name: Restore clipper data
+        uses: actions/cache@v4
+        with:
+          path: clipper/data
+          key: clipper-data-${{ github.run_id }}
+          restore-keys: |
+            clipper-data-
+
+      - name: Run pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          POSTIZ_API_KEY: ${{ secrets.POSTIZ_API_KEY }}
+        run: python run.py run

@@ -1,0 +1,28 @@
+name: clipper-tests
+
+# Runs the clipper offline test suite on every change under clipper/.
+# No secrets, no binaries — the suite uses fakes for ffmpeg/whisper/Anthropic/
+# Postiz/Telegram, so it's fast and deterministic.
+
+on:
+  push:
+    paths: ["clipper/**", ".github/workflows/clipper-tests.yml"]
+  pull_request:
+    paths: ["clipper/**", ".github/workflows/clipper-tests.yml"]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clipper
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Only hard deps to import the modules under test; everything else is lazy/faked.
+      - run: python -m pip install --upgrade pip PyYAML python-dotenv
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
