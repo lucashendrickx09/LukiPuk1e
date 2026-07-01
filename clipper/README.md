@@ -55,7 +55,17 @@ Modules are named by phase so you can follow the pipeline as it grows.
 
 ---
 
-## 📱 Use it from your phone (web dashboard + Tailscale)
+## 📱 Use it from your phone
+
+Two clients, same backend — both talk to `python run.py webui`:
+
+- **Native app (Expo)** — a real installed app with a native video player:
+  see [`../clipper-app/README.md`](../clipper-app/README.md). Run it with Expo
+  Go today; build a standalone app later.
+- **Web dashboard (PWA)** — zero install on the phone; add to home screen from
+  the browser. Setup below.
+
+## 📱 Web dashboard (PWA) + Tailscale
 
 The heavy work (download, transcription, ffmpeg) runs on a computer — your phone
 is a remote control. `python run.py webui` serves a phone-friendly dashboard that

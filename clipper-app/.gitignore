@@ -1,0 +1,8 @@
+# local native folders if ever prebuilt
+ios/
+android/
+# expo
+.expo/
+dist/
+expo-env.d.ts
+node_modules/

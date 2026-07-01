@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Clipper",
+    "slug": "clipper-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "clipper",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.clipper.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.clipper.app",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0F14",
+        "foregroundImage": "./assets/images/icon.png"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F14",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96
+        }
+      ]
+    ]
+  }
+}
