@@ -35,13 +35,32 @@ app talks to the same FastAPI backend as the web dashboard
 When you later get Tailscale, enter the `100.x.y.z` address instead — the app
 then works from anywhere, not just home Wi-Fi.
 
-## Standalone install (later, optional)
+## Standalone install (a real app icon, no dev server)
 
-Expo Go needs the dev server running. For a real installed app that works
-without it, build once with EAS:
+Expo Go needs `npx expo start` running. For a permanently installed app,
+`eas.json` is already configured — one-time setup, then one command per build:
+
 ```bash
-npx eas build --profile preview --platform ios    # or android
+npx eas init          # once: log in / create a free account at expo.dev,
+                      # links the project (writes projectId into app.json)
 ```
-(Requires a free Expo account; iOS install via TestFlight needs an Apple
-Developer account.) The `app.json` already includes the cleartext/local-network
-permissions the LAN connection needs in standalone builds.
+
+**Android — easiest (free):**
+```bash
+npx eas build --profile preview --platform android
+```
+Builds an APK in Expo's cloud; when done you get a link/QR — open it on the
+phone and install directly. Done.
+
+**iPhone — pick one:**
+- **Free, using your Mac + Xcode:** plug the phone in and run
+  `npx expo run:ios --device` (needs Xcode from the App Store and a free Apple
+  ID). Installs a real app; Apple expires free-signed apps after ~7 days, so
+  re-run to refresh.
+- **Proper distribution:** an Apple Developer account ($99/yr), then
+  `npx eas build --profile production --platform ios` and
+  `npx eas submit -p ios` to get it in TestFlight — installs like a normal app
+  and doesn't expire.
+
+The `app.json` already includes the cleartext/local-network permissions the LAN
+connection needs in standalone builds.
