@@ -133,6 +133,12 @@ def cmd_publish(args):
             print(f"{ch.name}: {r}")
         if not results:
             print(f"{ch.name}: nothing approved to publish")
+        if not args.dry_run:
+            try:
+                for r in publish.sweep_live(cfg, led, ch):
+                    print(f"{ch.name}: went live {r}")
+            except Exception as e:
+                print(f"{ch.name}: live sweep skipped ({e})")
     return 0
 
 

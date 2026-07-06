@@ -43,8 +43,13 @@ def build_command(voice_wav: Path, ass_path: Path, out_mp4: Path, theme: dict,
 
 
 def render(voice_wav: Path, words: list[Word], out_mp4: Path, *, theme: dict,
-           seed: int, workdir: Path | None = None) -> tuple[Path, float]:
-    """Render the final short. Returns (path, duration_seconds)."""
+           seed: int, workdir: Path | None = None,
+           hook_text: str | None = None, hook_seconds: float | None = None) -> tuple[Path, float]:
+    """Render the final short. Returns (path, duration_seconds).
+
+    hook_text/hook_seconds put the hook on screen as a card from frame 0 until
+    the spoken hook ends (hook_seconds, unshifted voice timeline).
+    """
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found — install it (brew install ffmpeg / apt install ffmpeg)")
     out_mp4 = Path(out_mp4)
@@ -53,7 +58,9 @@ def render(voice_wav: Path, words: list[Word], out_mp4: Path, *, theme: dict,
 
     shifted = [Word(w.text, w.start + LEAD_IN, w.end + LEAD_IN) for w in words]
     ass_path = workdir / (out_mp4.stem + ".ass")
-    captions.build_ass(shifted, ass_path, accent=theme["accent"])
+    hook_until = (hook_seconds + LEAD_IN) if hook_seconds else None
+    captions.build_ass(shifted, ass_path, accent=theme["accent"],
+                       hook_text=hook_text, hook_until=hook_until)
 
     duration = (shifted[-1].end if shifted else LEAD_IN + 1.0) + TAIL
     cmd = build_command(voice_wav, ass_path, out_mp4, theme, duration, seed)

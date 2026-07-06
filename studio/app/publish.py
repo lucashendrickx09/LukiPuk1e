@@ -23,6 +23,7 @@ from .scriptgen import Script
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/youtube.force-ssl",  # posting the engagement comment
     "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 
@@ -124,6 +125,47 @@ def export_pack(video_path: str, script: Script, channel, publish_at_iso: str, o
         f"CATEGORY: {meta['categoryId']}\nMade for kids: NO\nAltered content: YES\n")
     (dest / "script.json").write_text(json.dumps(script.to_dict(), indent=2))
     return dest
+
+
+def post_comment(channel, yt_video_id: str, text: str) -> str:
+    """Post a comment as the channel (50 quota units). Comments can't be posted on
+    private videos, so this is called by sweep_live once the video is public.
+    Note: the Data API cannot PIN comments — pinning stays a one-tap action in Studio;
+    the creator's own comment is prominently surfaced regardless."""
+    service = get_service(channel)
+    resp = service.commentThreads().insert(
+        part="snippet",
+        body={"snippet": {"videoId": yt_video_id,
+                          "topLevelComment": {"snippet": {"textOriginal": text}}}},
+    ).execute()
+    return resp["id"]
+
+
+def sweep_live(cfg, ledger, channel, now: dt.datetime | None = None) -> list[dict]:
+    """Transition uploaded posts whose publish time has passed to 'live' and post
+    the script's engagement comment exactly once (the status transition is the
+    idempotency guard)."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    results = []
+    for post in ledger.posts(channel.name, status="uploaded"):
+        if not post["publish_at"]:
+            continue
+        when = dt.datetime.fromisoformat(post["publish_at"].replace("Z", "+00:00"))
+        if when > now:
+            continue
+        ledger.set_post(post["id"], status="live")
+        result = {"post_id": post["id"], "yt_id": post["yt_video_id"], "comment": None}
+        video = ledger.video(post["video_id"])
+        script = Script.from_dict(json.loads(video["script"])) if video else None
+        if script and script.pin_comment and post["yt_video_id"]:
+            try:
+                result["comment"] = post_comment(channel, post["yt_video_id"], script.pin_comment)
+                ledger.log("comment_posted", f"post {post['id']}")
+            except Exception as e:  # video may still be private (pre-audit) — not fatal
+                ledger.log("comment_error", f"post {post['id']}: {e}")
+                result["comment_error"] = str(e)
+        results.append(result)
+    return results
 
 
 def publish_approved(cfg, ledger, channel, dry_run: bool = False) -> list[dict]:

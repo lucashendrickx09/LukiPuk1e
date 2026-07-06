@@ -29,6 +29,7 @@ GOOD_SCRIPT = {
     "tags": ["personal finance", "banking", "savings"],
     "hook_type": "stat_shock",
     "format": "explainer",
+    "pin_comment": "What does your checking account actually pay? Check and reply with the number.",
 }
 
 

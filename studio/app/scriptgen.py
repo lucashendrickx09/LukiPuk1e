@@ -28,8 +28,10 @@ SCRIPT_SCHEMA = {
         "tags": {"type": "array", "items": {"type": "string"}},
         "hook_type": {"type": "string", "enum": list(HOOK_TYPES)},
         "format": {"type": "string", "enum": list(FORMATS)},
+        "pin_comment": {"type": "string",
+                        "description": "A question (<=120 chars) the channel posts as its own first comment to spark replies. Must invite a specific, easy-to-give answer."},
     },
-    "required": ["hook", "beats", "payoff", "loop_line", "title", "description", "tags", "hook_type", "format"],
+    "required": ["hook", "beats", "payoff", "loop_line", "title", "description", "tags", "hook_type", "format", "pin_comment"],
     "additionalProperties": False,
 }
 
@@ -51,7 +53,11 @@ Non-negotiable structure (the retention contract):
 Style: spoken language, short sentences, second person, specific numbers, zero
 cliches. Total spoken length must land between 60 and 95 words (that is 23-36
 seconds at speaking pace). This script must contain a genuinely original insight
-or framing — not a rewording of what every channel in the niche already says."""
+or framing — not a rewording of what every channel in the niche already says.
+
+Also write pin_comment: one question (<=120 chars) the channel will post as its
+own first comment. It must invite a specific, easy answer (a number, a choice,
+a personal case) — comments are an algorithm signal, so make replying effortless."""
 
 USER_PROMPT = """Topic: {topic}
 Angle: {angle}
@@ -70,6 +76,7 @@ class Script:
     tags: list[str] = field(default_factory=list)
     hook_type: str = "curiosity_gap"
     format: str = "explainer"
+    pin_comment: str = ""
 
     def spoken_text(self) -> str:
         parts = [self.hook, *self.beats, self.payoff, self.loop_line]
@@ -127,6 +134,8 @@ def validate(script: Script, target_seconds=(18, 40)) -> list[str]:
         issues.append("loop line shares no significant word with the hook (won't read as a loop)")
     if len(script.title) > 100:
         issues.append("title over 100 chars")
+    if len(script.pin_comment) > 150:
+        issues.append("pin_comment over 150 chars")
     return issues
 
 

@@ -17,6 +17,18 @@ def _slug(text: str, maxlen: int = 40) -> str:
     return s[:maxlen] or "video"
 
 
+def _hook_end(script, words) -> float:
+    """When the spoken hook ends (voice timeline) — the hook card holds until then.
+
+    TTS tokens don't map 1:1 to script words (punctuation, contractions), so this
+    is an approximation, clamped to a sane card duration.
+    """
+    if not words:
+        return 2.5
+    idx = min(len(script.hook.split()), len(words)) - 1
+    return min(max(words[idx].end, 1.5), 4.0)
+
+
 def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) -> int | None:
     """idea -> script (validated+scored) -> voice -> render -> review queue.
 
@@ -55,7 +67,8 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
     theme = visuals.theme_for(channel.theme)
     seed = video_id * 7919 + int(time.time()) % 7919
-    path, duration = render_mod.render(wav, words, out_mp4, theme=theme, seed=seed, workdir=workdir)
+    path, duration = render_mod.render(wav, words, out_mp4, theme=theme, seed=seed, workdir=workdir,
+                                       hook_text=script.hook, hook_seconds=_hook_end(script, words))
 
     ledger.set_video(video_id, video_path=str(path), duration=duration, status="rendered")
     ledger.log("rendered", f"video {video_id} ({duration:.1f}s) -> {path}")
@@ -91,6 +104,11 @@ def run_daily(cfg, ledger, client=None, engine=None, dry_run_publish: bool = Fal
             for vid in made:
                 review.approve(ledger, vid)
         published = publish.publish_approved(cfg, ledger, channel, dry_run=dry_run_publish)
+        went_live = []
+        try:
+            went_live = publish.sweep_live(cfg, ledger, channel)
+        except Exception as e:
+            ledger.log("sweep_error", f"{channel.name}: {e}")
         learned = {}
         try:
             from . import analytics
@@ -101,6 +119,7 @@ def run_daily(cfg, ledger, client=None, engine=None, dry_run_publish: bool = Fal
         summary["channels"][channel.name] = {
             "produced": made,
             "published": published,
+            "went_live": went_live,
             "weights_updated": len(learned),
             "awaiting_review": [v["id"] for v in review.queue(ledger, channel.name)],
         }
@@ -130,5 +149,6 @@ def sample_video(cfg, ledger, channel, out: Path | None = None) -> Path:
     out = out or cfg.data_dir / "renders" / f"{channel.name}_sample.mp4"
     out.parent.mkdir(parents=True, exist_ok=True)
     path, _ = render_mod.render(wav, words, out, theme=visuals.theme_for(channel.theme),
-                                seed=42, workdir=workdir)
+                                seed=42, workdir=workdir,
+                                hook_text=script.hook, hook_seconds=_hook_end(script, words))
     return path

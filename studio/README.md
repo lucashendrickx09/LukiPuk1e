@@ -83,6 +83,19 @@ YouTube's free **API audit** are locked private. Two ways to run:
   flip visibility in YouTube Studio from your phone (~10 s), or set
   `publishing.mode: export` to get ready-to-post folders in `data/outbox/` instead.
 
+### What every render includes
+
+- **Hook card at frame 0** — the hook text sits at the top of the screen from the
+  first frame until the spoken hook ends. The seed-audience swipe decision happens
+  in the first second; the promise must be readable before a word is spoken.
+- **Karaoke captions** mid-screen, word-timed to the voice.
+- **Retention progress bar** along the bottom edge.
+- **Engagement comment** — every script includes a `pin_comment` (a question that's
+  effortless to answer). When a scheduled video goes public, the pipeline posts it
+  as the channel's own comment (comments are an algorithm signal). The API can't
+  *pin* comments — if you want it pinned, that's one tap in Studio; the creator
+  comment is prominently surfaced either way.
+
 ## Close the loop (this is what makes the formula dynamic)
 
 ```bash
@@ -103,8 +116,17 @@ python run.py run         # research -> produce -> publish approved -> analyze, 
 Cron it (laptop/server/Raspberry Pi — everything runs on CPU):
 
 ```cron
-30 9 * * *  cd /path/to/studio && .venv/bin/python run.py run >> data/run.log 2>&1
+30 9 * * *   cd /path/to/studio && .venv/bin/python run.py run >> data/run.log 2>&1
+0 13,20 * * * cd /path/to/studio && .venv/bin/python run.py publish >> data/run.log 2>&1
 ```
+
+The second line re-runs `publish` near the posting slots so the live-sweep can post
+each video's engagement comment shortly after it goes public.
+
+**On a Mac:** cron only fires while the machine is awake. Either keep the lid open
+on power, schedule a wake (System Settings → Energy → scheduled wake, or
+`sudo pmset repeat wakeorpoweron MTWRFSU 09:25:00`), or run the daily loop manually —
+it's one command.
 
 With `review.required: true` (default), the cron run produces + schedules but the
 review step stays yours: check the queue once a day, approve, done. That human pass

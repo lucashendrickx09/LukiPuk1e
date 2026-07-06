@@ -31,6 +31,47 @@ def test_export_pack_writes_everything(tmp_path, channel):
     assert json.loads((dest / "script.json").read_text())["hook"] == GOOD_SCRIPT["hook"]
 
 
+def test_sweep_live_posts_comment_once(cfg, ledger, channel, monkeypatch):
+    idea = ledger.add_idea(channel.name, "sweep topic")
+    vid = ledger.add_video(idea, channel.name, GOOD_SCRIPT, hook_type="stat_shock",
+                           fmt="explainer", est_seconds=26, score=0.8)
+    post = ledger.add_post(vid, channel.name, "t", "2026-07-07T16:30:00Z")
+    ledger.set_post(post, yt_video_id="abc123", status="uploaded")
+
+    posted = []
+    monkeypatch.setattr(publish, "post_comment", lambda ch, yid, text: posted.append((yid, text)) or "cid")
+
+    before = dt.datetime(2026, 7, 7, 12, 0, tzinfo=dt.timezone.utc)
+    assert publish.sweep_live(cfg, ledger, channel, now=before) == []  # not live yet
+
+    after = dt.datetime(2026, 7, 7, 17, 0, tzinfo=dt.timezone.utc)
+    results = publish.sweep_live(cfg, ledger, channel, now=after)
+    assert len(results) == 1 and results[0]["comment"] == "cid"
+    assert posted == [("abc123", GOOD_SCRIPT["pin_comment"])]
+    assert ledger.posts(channel.name)[0]["status"] == "live"
+
+    # idempotent: second sweep does nothing
+    assert publish.sweep_live(cfg, ledger, channel, now=after) == []
+    assert len(posted) == 1
+
+
+def test_sweep_live_survives_comment_failure(cfg, ledger, channel, monkeypatch):
+    idea = ledger.add_idea(channel.name, "sweep fail topic")
+    vid = ledger.add_video(idea, channel.name, GOOD_SCRIPT, hook_type="stat_shock",
+                           fmt="explainer", est_seconds=26, score=0.8)
+    post = ledger.add_post(vid, channel.name, "t", "2026-07-07T16:30:00Z")
+    ledger.set_post(post, yt_video_id="abc123", status="uploaded")
+
+    def boom(ch, yid, text):
+        raise RuntimeError("video still private")
+    monkeypatch.setattr(publish, "post_comment", boom)
+
+    after = dt.datetime(2026, 7, 7, 17, 0, tzinfo=dt.timezone.utc)
+    results = publish.sweep_live(cfg, ledger, channel, now=after)
+    assert results[0]["comment"] is None and "comment_error" in results[0]
+    assert ledger.posts(channel.name)[0]["status"] == "live"  # transition still happens
+
+
 def test_publish_approved_export_mode(cfg, ledger, channel, tmp_path):
     video_file = tmp_path / "v.mp4"
     video_file.write_bytes(b"0" * 20_000)

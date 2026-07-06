@@ -24,6 +24,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Pop,{font},{size},{accent},{base},&H00101010,&H96000000,-1,0,0,0,100,100,1,0,1,{outline},2,5,60,60,{margin_v},1
+Style: Hook,{font},76,{accent},{accent},&H00101010,&H96000000,-1,0,0,0,100,100,1,0,1,6,2,8,70,70,340,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -65,12 +66,21 @@ def chunk_words(words: list[Word]) -> list[list[Word]]:
 
 def build_ass(words: list[Word], out_path: str | Path, *, accent: str = "#FFD400",
               base: str = "#FFFFFF", font: str = "DejaVu Sans", size: int = 112,
-              margin_v: int = 780, outline: int = 7) -> Path:
+              margin_v: int = 780, outline: int = 7,
+              hook_text: str | None = None, hook_until: float | None = None) -> Path:
     """margin_v=780 with Alignment=5 centers the block slightly below mid-screen,
-    clear of the Shorts UI (title at bottom, buttons at right)."""
+    clear of the Shorts UI (title at bottom, buttons at right).
+
+    If hook_text is given, it is shown as a top-of-screen card from frame 0 until
+    hook_until — the swipe decision happens in the first second, so the promise
+    must be readable at t=0, before the first spoken word.
+    """
     out_path = Path(out_path)
     lines = [ASS_HEADER.format(font=font, size=size, accent=_bgr(accent), base=_bgr(base),
                                margin_v=margin_v, outline=outline)]
+    if hook_text:
+        end = hook_until if hook_until and hook_until > 0 else 2.5
+        lines.append(f"Dialogue: 0,{_ts(0)},{_ts(end)},Hook,,0,0,0,,{_esc(hook_text.upper())}\n")
     for chunk in chunk_words(words):
         start, end = chunk[0].start, chunk[-1].end
         parts = []

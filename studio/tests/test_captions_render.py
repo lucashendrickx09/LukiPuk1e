@@ -27,6 +27,22 @@ def test_ass_file_has_karaoke_tags(tmp_path):
     assert "&H0000D4FF" in text
 
 
+def test_hook_card_from_frame_zero(tmp_path):
+    words = [Word("banks", 0.0, 0.4), Word("take", 0.4, 0.8), Word("money", 0.8, 1.3)]
+    out = captions.build_ass(words, tmp_path / "t.ass",
+                             hook_text="Banks take your money", hook_until=1.3)
+    text = out.read_text()
+    assert "Style: Hook" in text
+    assert "Dialogue: 0,0:00:00.00,0:00:01.30,Hook" in text
+    assert "BANKS TAKE YOUR MONEY" in text  # uppercased card
+
+
+def test_no_hook_card_without_hook_text(tmp_path):
+    words = [Word("hello", 0.0, 0.5)]
+    out = captions.build_ass(words, tmp_path / "t.ass")
+    assert ",Hook," not in out.read_text()
+
+
 def test_ass_escapes_braces(tmp_path):
     words = [Word("{evil}", 0.0, 0.5)]
     out = captions.build_ass(words, tmp_path / "t.ass")
