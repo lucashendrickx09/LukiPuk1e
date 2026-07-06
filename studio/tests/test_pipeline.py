@@ -68,3 +68,24 @@ def test_low_score_idea_gets_gated(cfg, channel, ledger):
 def test_sample_video_renders(cfg, channel, ledger):
     path = pipeline.sample_video(cfg, ledger, channel)
     assert path.exists() and path.stat().st_size > 10_000
+
+
+def test_autopilot_approves_above_threshold(cfg, channel, ledger, tmp_path, monkeypatch):
+    # two rendered videos: one above the autopilot floor, one below
+    vids = []
+    for score in (0.85, 0.40):
+        idea = ledger.add_idea(channel.name, f"auto topic {score}")
+        vid = ledger.add_video(idea, channel.name, dict(__import__('tests.conftest', fromlist=['GOOD_SCRIPT']).GOOD_SCRIPT),
+                               hook_type="stat_shock", fmt="explainer", est_seconds=26, score=score)
+        f = tmp_path / f"v{vid}.mp4"
+        f.write_bytes(b"0" * 20_000)
+        ledger.set_video(vid, video_path=str(f), duration=26.0, status="rendered")
+        vids.append(vid)
+
+    cfg.review_auto_above = 0.72
+    monkeypatch.setattr(pipeline, "run_channel", lambda *a, **k: list(vids))
+    summary = pipeline.run_daily(cfg, ledger)  # publish_mode=export in fixture
+
+    assert ledger.video(vids[0])["status"] == "published"      # auto-approved + exported
+    assert ledger.video(vids[1])["status"] == "rendered"       # still waiting for a human
+    assert summary["channels"][channel.name]["awaiting_review"] == [vids[1]]

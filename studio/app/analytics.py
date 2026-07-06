@@ -38,6 +38,19 @@ def pull(cfg, ledger, channel) -> int:
     return updated
 
 
+def channel_stats(channel) -> dict:
+    """Channel-level statistics (subs/views/uploads) for monetization tracking."""
+    service = publish.get_service(channel)
+    resp = service.channels().list(part="statistics", mine=True).execute()
+    items = resp.get("items") or []
+    if not items:
+        return {}
+    s = items[0]["statistics"]
+    return {"subscribers": int(s.get("subscriberCount", 0)),
+            "total_views": int(s.get("viewCount", 0)),
+            "uploads": int(s.get("videoCount", 0))}
+
+
 def learn(ledger, channel) -> dict[str, float]:
     """Update formula priors from the freshest metrics. The 'dynamic' in the formula."""
     updated = formula.update_priors(ledger, channel.name)

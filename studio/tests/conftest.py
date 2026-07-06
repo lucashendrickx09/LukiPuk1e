@@ -30,6 +30,19 @@ GOOD_SCRIPT = {
     "hook_type": "stat_shock",
     "format": "explainer",
     "pin_comment": "What does your checking account actually pay? Check and reply with the number.",
+    "scenes": [
+        {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "", "points": []},
+        {"kind": "big_stat", "headline": "", "sub": "", "value": "0.01%",
+         "label": "average checking interest", "points": []},
+        {"kind": "big_stat", "headline": "", "sub": "", "value": "4.00%",
+         "label": "high-yield, same insurance", "points": []},
+        {"kind": "chart_up", "headline": "Your $10k over 10 years", "sub": "",
+         "value": "", "label": "4% vs 0.01%", "points": [10, 10.4, 10.8, 11.7, 13.1, 14.8]},
+        {"kind": "list_reveal", "headline": "The 11 minutes", "sub": "open account;link bank;move money",
+         "value": "", "label": "", "points": []},
+        {"kind": "big_stat", "headline": "", "sub": "", "value": "$400/yr",
+         "label": "for a different login", "points": []},
+    ],
 }
 
 

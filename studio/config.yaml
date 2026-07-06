@@ -14,6 +14,7 @@ channels:
     voice: af_heart                 # kokoro voice (edge fallback: en-US-AriaNeural)
     voice_rate: 1.08
     theme: midnight
+    visual_style: scenes            # scenes = animated story graphics | gradient = plain
     slots: ["12:30", "19:30"]       # viewer-local peak windows
     timezone: America/New_York
     category_id: "27"               # Education
@@ -32,6 +33,7 @@ channels:
     voice: am_michael               # kokoro voice (edge fallback: en-US-ChristopherNeural)
     voice_rate: 1.08
     theme: royal
+    visual_style: scenes
     slots: ["13:00", "20:00"]
     timezone: America/New_York
     category_id: "27"
@@ -54,6 +56,8 @@ cadence:
 
 review:
   required: true                    # nothing posts without your approval
+  # auto_above: 0.72                # uncomment for autopilot: videos scoring >= this
+                                    # publish without review; the rest still queue
 
 voice:
   engine: auto                      # auto | kokoro | edge | mock

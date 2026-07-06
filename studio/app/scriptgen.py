@@ -14,6 +14,23 @@ from . import formula
 HOOK_TYPES = ("question", "bold_claim", "pattern_interrupt", "negative_warning",
               "curiosity_gap", "challenge", "stat_shock")
 FORMATS = ("listicle", "story", "explainer", "myth_bust", "how_to", "comparison")
+SCENE_KINDS = ("ambient", "title_card", "big_stat", "chart_up", "timeline",
+               "quote", "list_reveal", "figure")
+
+SCENE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": list(SCENE_KINDS)},
+        "headline": {"type": "string", "description": "primary text (short); empty string if unused"},
+        "sub": {"type": "string", "description": "secondary text; for timeline/list_reveal: items separated by ';' (timeline items as 'YEAR label')"},
+        "value": {"type": "string", "description": "the big number/amount, e.g. '$5.9B' (big_stat/figure); empty if unused"},
+        "label": {"type": "string", "description": "small caption under the value/chart; empty if unused"},
+        "points": {"type": "array", "items": {"type": "number"},
+                   "description": "chart_up y-values, 4-8 rising numbers; empty list if unused"},
+    },
+    "required": ["kind", "headline", "sub", "value", "label", "points"],
+    "additionalProperties": False,
+}
 
 SCRIPT_SCHEMA = {
     "type": "object",
@@ -30,8 +47,10 @@ SCRIPT_SCHEMA = {
         "format": {"type": "string", "enum": list(FORMATS)},
         "pin_comment": {"type": "string",
                         "description": "A question (<=120 chars) the channel posts as its own first comment to spark replies. Must invite a specific, easy-to-give answer."},
+        "scenes": {"type": "array", "items": SCENE_SCHEMA,
+                   "description": "Storyboard: exactly one scene per segment, in order: hook, each beat, payoff. Scene 1 (hook) should be 'ambient' or 'big_stat' — the hook text is already on screen."},
     },
-    "required": ["hook", "beats", "payoff", "loop_line", "title", "description", "tags", "hook_type", "format", "pin_comment"],
+    "required": ["hook", "beats", "payoff", "loop_line", "title", "description", "tags", "hook_type", "format", "pin_comment", "scenes"],
     "additionalProperties": False,
 }
 
@@ -57,7 +76,20 @@ or framing — not a rewording of what every channel in the niche already says.
 
 Also write pin_comment: one question (<=120 chars) the channel will post as its
 own first comment. It must invite a specific, easy answer (a number, a choice,
-a personal case) — comments are an algorithm signal, so make replying effortless."""
+a personal case) — comments are an algorithm signal, so make replying effortless.
+
+Also storyboard the video in scenes: exactly one scene per segment, in order —
+hook, each beat, payoff. Scenes are simple animated infographics; pick the kind
+that best VISUALIZES the segment being spoken over it:
+- ambient: decorated background only (good for the hook — its text is on screen)
+- big_stat: one huge number/amount (value) + small label
+- chart_up: a rising line chart (points = 4-8 numbers, e.g. net worth by year)
+- timeline: 2-4 milestones, sub = "1962 First store;1970 IPO;1985 Richest man"
+- quote: a short quote (headline) + who said it (label)
+- list_reveal: 2-4 punchy items, sub = "item one;item two;item three"
+- figure: a stylized person card — headline = name, value = their number
+  (e.g. '$5.9B'), label = who/when
+Numbers in scenes must match numbers spoken in the segment."""
 
 USER_PROMPT = """Topic: {topic}
 Angle: {angle}
@@ -77,6 +109,7 @@ class Script:
     hook_type: str = "curiosity_gap"
     format: str = "explainer"
     pin_comment: str = ""
+    scenes: list[dict] = field(default_factory=list)
 
     def spoken_text(self) -> str:
         parts = [self.hook, *self.beats, self.payoff, self.loop_line]

@@ -32,6 +32,7 @@ class ChannelConfig:
     voice: str = "af_heart"        # kokoro voice (or edge-tts voice name)
     voice_rate: float = 1.08       # speech speed multiplier applied after synthesis
     theme: str = "midnight"        # visual theme key (app/visuals.py)
+    visual_style: str = "scenes"   # scenes (animated story graphics) | gradient (plain)
     slots: list[str] = field(default_factory=lambda: ["12:30", "19:30"])
     timezone: str = "America/New_York"  # viewers' timezone for slot scheduling
     category_id: str = "27"        # YouTube category (27=Education, 28=Sci&Tech, 24=Entertainment)
@@ -63,6 +64,7 @@ class Config:
     # cadence
     videos_per_day: int = 2          # per channel (2 slots)
     review_required: bool = True     # nothing publishes without human approval
+    review_auto_above: float | None = None  # auto-approve videos scoring >= this (full autopilot)
     # voice
     tts_engine: str = "auto"         # auto | kokoro | edge | mock
     # publishing
@@ -123,6 +125,8 @@ def load_config(path: str | Path | None = None) -> Config:
         target_seconds=tuple(formula.get("target_seconds", (18, 40))),
         videos_per_day=int(cadence.get("videos_per_day", 2)),
         review_required=bool(raw.get("review", {}).get("required", True)),
+        review_auto_above=(float(raw["review"]["auto_above"])
+                           if raw.get("review", {}).get("auto_above") is not None else None),
         tts_engine=raw.get("voice", {}).get("engine", "auto"),
         publish_mode=publishing.get("mode", "api"),
         min_lead_minutes=int(publishing.get("min_lead_minutes", 45)),

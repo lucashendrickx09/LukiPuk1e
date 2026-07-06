@@ -249,6 +249,19 @@ class Ledger:
             (channel, key, value, n, time.time()))
         self.db.commit()
 
+    def weights_rows(self, channel: str) -> list[sqlite3.Row]:
+        return self.db.execute(
+            "SELECT key, value, samples FROM weights WHERE channel=? ORDER BY key", (channel,)).fetchall()
+
+    def recent_events(self, kinds: tuple[str, ...] | None = None, limit: int = 100) -> list[sqlite3.Row]:
+        if kinds:
+            marks = ",".join("?" for _ in kinds)
+            return self.db.execute(
+                f"SELECT ts, kind, detail FROM events WHERE kind IN ({marks}) ORDER BY ts DESC LIMIT ?",
+                (*kinds, limit)).fetchall()
+        return self.db.execute(
+            "SELECT ts, kind, detail FROM events ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+
     def counts(self) -> dict:
         out = {}
         for table in ("ideas", "videos", "posts", "metrics"):

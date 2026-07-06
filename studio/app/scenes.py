@@ -1,0 +1,290 @@
+"""Native story graphics: each script segment gets a drawn scene (PIL) that the
+renderer animates (slow zoom + hard cuts on beat boundaries).
+
+Everything is generated — typography, charts, timelines, stylized figures — so
+"how X got rich" stories get real visuals with zero stock footage, zero image
+rights, and a consistent brand look. Scenes are drawn at 1.25x the video size to
+give the zoom room to move.
+
+Layout contract: the karaoke captions occupy the vertical center band of the
+video, and the hook card sits at the top for the first seconds — so scenes put
+primary content in the upper third and secondary labels in the lower third.
+"""
+
+from __future__ import annotations
+
+import random
+from functools import lru_cache
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+SCENE_W, SCENE_H = 1350, 2400          # 1.25x of 1080x1920
+PRIMARY_Y = 620                        # main content anchor (upper third)
+SECONDARY_Y = 1780                     # label zone (lower third, above Shorts UI)
+CONTENT_W = 1120                       # max text width
+
+KINDS = ("ambient", "title_card", "big_stat", "chart_up", "timeline",
+         "quote", "list_reveal", "figure")
+
+_FONT_PATHS = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+]
+
+
+@lru_cache(maxsize=64)
+def _font(size: int) -> ImageFont.FreeTypeFont:
+    for p in _FONT_PATHS:
+        try:
+            return ImageFont.truetype(p, size)
+        except OSError:
+            continue
+    return ImageFont.load_default(size=size)
+
+
+def _rgb(hex_rgb: str) -> tuple[int, int, int]:
+    h = hex_rgb.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _mix(a, b, t: float) -> tuple[int, int, int]:
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+# ------------------------------------------------------------- text helpers
+def _wrap(draw, text: str, font, max_width: int) -> list[str]:
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        cand = f"{cur} {w}".strip()
+        if draw.textlength(cand, font=font) <= max_width or not cur:
+            cur = cand
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _fit(draw, text: str, max_width: int, start: int, min_size: int = 40,
+         max_lines: int = 3) -> ImageFont.FreeTypeFont:
+    size = start
+    while size > min_size:
+        f = _font(size)
+        lines = _wrap(draw, text, f, max_width)
+        if len(lines) <= max_lines and all(draw.textlength(l, font=f) <= max_width for l in lines):
+            return f
+        size = int(size * 0.88)
+    return _font(min_size)
+
+
+def _draw_block(draw, text: str, cx: int, top: int, font, fill, max_width: int,
+                align_center: bool = True) -> int:
+    """Draw wrapped text; returns the y just below the block."""
+    lines = _wrap(draw, text, font, max_width)
+    line_h = int(font.size * 1.22)
+    y = top
+    for line in lines:
+        draw.text((cx, y), line, font=font, fill=fill,
+                  anchor="ma" if align_center else "la")
+        y += line_h
+    return y
+
+
+# ------------------------------------------------------------- background
+def _background(theme: dict, seed: int) -> Image.Image:
+    c = [_rgb(x) for x in theme["colors"]]
+    im = Image.new("RGB", (SCENE_W, SCENE_H))
+    d = ImageDraw.Draw(im)
+    for y in range(SCENE_H):
+        t = y / SCENE_H
+        col = _mix(c[0], c[1], t * 2) if t < 0.5 else _mix(c[1], c[2], (t - 0.5) * 2)
+        d.line([(0, y), (SCENE_W, y)], fill=col)
+    rng = random.Random(seed)
+    overlay = Image.new("RGBA", (SCENE_W, SCENE_H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    accent = _rgb(theme["accent"])
+    for _ in range(rng.randint(3, 5)):
+        r = rng.randint(120, 520)
+        x, y = rng.randint(-100, SCENE_W + 100), rng.choice(
+            [rng.randint(-100, 500), rng.randint(1900, SCENE_H + 100)])
+        od.ellipse([x - r, y - r, x + r, y + r], outline=(*accent, rng.randint(16, 44)),
+                   width=rng.randint(2, 7))
+    for _ in range(2):
+        r = rng.randint(260, 620)
+        x, y = rng.randint(0, SCENE_W), rng.choice([rng.randint(0, 400), rng.randint(2000, SCENE_H)])
+        od.ellipse([x - r, y - r, x + r, y + r], fill=(*_mix(c[1], accent, 0.3), 12))
+    im = Image.alpha_composite(im.convert("RGBA"), overlay)
+    return im
+
+
+# ------------------------------------------------------------- scene kinds
+def _ambient(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    cx = SCENE_W // 2
+    for i, r in enumerate((180, 300, 430)):
+        d.ellipse([cx - r, PRIMARY_Y - r + 60, cx + r, PRIMARY_Y + r + 60],
+                  outline=(*accent, 60 - i * 15), width=5 - i)
+    for _ in range(14):
+        x, y = rng.randint(80, SCENE_W - 80), rng.randint(200, 900)
+        s = rng.randint(3, 9)
+        d.ellipse([x - s, y - s, x + s, y + s], fill=(*accent, rng.randint(40, 110)))
+
+
+def _title_card(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    head = scene.get("headline") or scene.get("sub") or ""
+    if head:
+        f = _fit(d, head, CONTENT_W, 128)
+        bottom = _draw_block(d, head, SCENE_W // 2, PRIMARY_Y - 120, f, (255, 255, 255), CONTENT_W)
+        d.rounded_rectangle([SCENE_W // 2 - 140, bottom + 36, SCENE_W // 2 + 140, bottom + 52],
+                            radius=8, fill=(*accent, 255))
+        if scene.get("sub"):
+            _draw_block(d, scene["sub"], SCENE_W // 2, bottom + 110, _font(58),
+                        (235, 235, 235), CONTENT_W - 100)
+
+
+def _big_stat(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    cx = SCENE_W // 2
+    r = 400
+    d.ellipse([cx - r, PRIMARY_Y - r + 40, cx + r, PRIMARY_Y + r + 40],
+              outline=(*accent, 46), width=10)
+    value = scene.get("value") or scene.get("headline") or ""
+    if value:
+        f = _fit(d, value, CONTENT_W, 250, min_size=90, max_lines=1)
+        d.text((cx, PRIMARY_Y + 40), value, font=f, fill=(*accent, 255), anchor="mm")
+    label = scene.get("label") or scene.get("sub") or ""
+    if label:
+        _draw_block(d, label, cx, PRIMARY_Y + 250, _font(58), (240, 240, 240), CONTENT_W - 140)
+
+
+def _chart_up(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    pts = [float(p) for p in (scene.get("points") or []) if isinstance(p, (int, float))]
+    if len(pts) < 3:
+        pts = [1, 1.6, 2.1, 3.4, 5.2, 8.5]
+    head = scene.get("headline") or ""
+    if head:
+        _draw_block(d, head, SCENE_W // 2, 300, _fit(d, head, CONTENT_W, 88, max_lines=2),
+                    (255, 255, 255), CONTENT_W)
+    x0, x1, y0, y1 = 180, SCENE_W - 180, 520, 1020
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or 1.0
+    coords = [(x0 + (x1 - x0) * i / (len(pts) - 1),
+               y1 - (y1 - y0) * (p - lo) / span) for i, p in enumerate(pts)]
+    for y in range(y0, y1 + 1, 125):  # faint grid
+        d.line([(x0, y), (x1, y)], fill=(255, 255, 255, 22), width=2)
+    for width, alpha in ((26, 40), (14, 90), (7, 255)):  # glow stroke
+        d.line(coords, fill=(*accent, alpha), width=width, joint="curve")
+    for i, (x, y) in enumerate(coords):
+        s = 16 if i == len(coords) - 1 else 9
+        d.ellipse([x - s, y - s, x + s, y + s], fill=(255, 255, 255, 255))
+    # arrowhead on the last segment
+    lx, ly = coords[-1]
+    d.polygon([(lx + 10, ly - 26), (lx + 52, ly - 2), (lx + 10, ly + 20)], fill=(*accent, 255))
+    label = scene.get("label") or scene.get("sub") or ""
+    if label:
+        _draw_block(d, label, SCENE_W // 2, 1090, _font(54), (235, 235, 235), CONTENT_W)
+
+
+def _timeline(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    items = [s.strip() for s in (scene.get("sub") or "").split(";") if s.strip()][:4]
+    if not items:
+        items = ["...", "...", "..."]
+    head = scene.get("headline") or ""
+    if head:
+        _draw_block(d, head, SCENE_W // 2, 300, _fit(d, head, CONTENT_W, 84, max_lines=2),
+                    (255, 255, 255), CONTENT_W)
+    y = 760
+    x_positions = [int(200 + (SCENE_W - 400) * i / max(1, len(items) - 1)) for i in range(len(items))]
+    d.line([(x_positions[0], y), (x_positions[-1], y)], fill=(*accent, 140), width=6)
+    for x, item in zip(x_positions, items):
+        d.ellipse([x - 18, y - 18, x + 18, y + 18], fill=(*accent, 255))
+        d.ellipse([x - 30, y - 30, x + 30, y + 30], outline=(*accent, 90), width=4)
+        parts = item.split(" ", 1)
+        year, rest = (parts[0], parts[1] if len(parts) > 1 else "")
+        d.text((x, y - 120), year, font=_font(56), fill=(*accent, 255), anchor="ma")
+        if rest:
+            f = _font(42)
+            for j, line in enumerate(_wrap(d, rest, f, 260)[:3]):
+                d.text((x, y + 52 + j * 52), line, font=f, fill=(235, 235, 235), anchor="ma")
+
+
+def _quote(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    d.text((190, 300), "“", font=_font(300), fill=(*accent, 170), anchor="la")
+    text = scene.get("headline") or scene.get("sub") or ""
+    if text:
+        f = _fit(d, text, CONTENT_W - 80, 96, max_lines=4)
+        bottom = _draw_block(d, text, SCENE_W // 2, 560, f, (255, 255, 255), CONTENT_W - 80)
+        who = scene.get("label") or scene.get("value") or ""
+        if who:
+            d.text((SCENE_W // 2, bottom + 70), f"— {who}", font=_font(58),
+                   fill=(*accent, 255), anchor="ma")
+
+
+def _list_reveal(im, d, scene, theme, rng):
+    accent = _rgb(theme["accent"])
+    head = scene.get("headline") or ""
+    y = 320
+    if head:
+        y = _draw_block(d, head, SCENE_W // 2, y, _fit(d, head, CONTENT_W, 88, max_lines=2),
+                        (255, 255, 255), CONTENT_W) + 60
+    items = [s.strip() for s in (scene.get("sub") or "").split(";") if s.strip()][:4]
+    f = _font(64)
+    for item in items:
+        d.text((170, y), "›", font=_font(80), fill=(*accent, 255), anchor="la")
+        lines = _wrap(d, item, f, CONTENT_W - 160)
+        for line in lines:
+            d.text((260, y + 6), line, font=f, fill=(240, 240, 240), anchor="la")
+            y += int(f.size * 1.25)
+        y += 44
+
+
+def _figure(im, d, scene, theme, rng):
+    """Stylized person card — silhouette, name, their number. No likeness, no rights issues."""
+    accent = _rgb(theme["accent"])
+    cx = SCENE_W // 2
+    head = scene.get("headline") or ""
+    if head:  # the name, on top
+        _draw_block(d, head, cx, 290, _fit(d, head, CONTENT_W, 104, max_lines=2),
+                    (255, 255, 255), CONTENT_W)
+    # silhouette
+    sil_y = 640
+    ring = 330
+    d.ellipse([cx - ring, sil_y - ring + 130, cx + ring, sil_y + ring + 130],
+              outline=(*accent, 60), width=8)
+    dark = _mix(_rgb(theme["colors"][0]), accent, 0.22)
+    d.ellipse([cx - 130, sil_y - 60, cx + 130, sil_y + 200], fill=(*dark, 255))          # head
+    d.ellipse([cx - 128, sil_y - 58, cx + 128, sil_y + 198], outline=(*accent, 130), width=5)
+    d.pieslice([cx - 300, sil_y + 220, cx + 300, sil_y + 820], 180, 360, fill=(*dark, 255))  # shoulders
+    d.arc([cx - 300, sil_y + 220, cx + 300, sil_y + 820], 180, 360, fill=(*accent, 130), width=5)
+    value = scene.get("value") or ""
+    if value:
+        f = _fit(d, value, CONTENT_W, 170, min_size=80, max_lines=1)
+        d.text((cx, SECONDARY_Y - 40), value, font=f, fill=(*accent, 255), anchor="mm")
+    label = scene.get("label") or scene.get("sub") or ""
+    if label:
+        _draw_block(d, label, cx, SECONDARY_Y + 80, _font(52), (235, 235, 235), CONTENT_W - 120)
+
+
+_DISPATCH = {
+    "ambient": _ambient, "title_card": _title_card, "big_stat": _big_stat,
+    "chart_up": _chart_up, "timeline": _timeline, "quote": _quote,
+    "list_reveal": _list_reveal, "figure": _figure,
+}
+
+
+def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path) -> Path:
+    """Draw one scene card to PNG (1350x2400)."""
+    out_png = Path(out_png)
+    rng = random.Random(seed)
+    im = _background(theme, seed)
+    d = ImageDraw.Draw(im, "RGBA")
+    _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+    im.convert("RGB").save(out_png, "PNG")
+    return out_png

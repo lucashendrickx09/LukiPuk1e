@@ -85,6 +85,14 @@ YouTube's free **API audit** are locked private. Two ways to run:
 
 ### What every render includes
 
+- **Animated story scenes** (`visual_style: scenes`) — Claude storyboards every
+  script: one scene per segment, drawn natively (no stock footage, no image
+  rights) and animated with slow zoom + hard cuts on beat boundaries. Scene kinds:
+  `big_stat` (a huge number), `chart_up` (rising line chart), `timeline`
+  (milestones), `figure` (stylized person card — name + their number, perfect for
+  "how X got rich" stories), `quote`, `list_reveal`, `title_card`, `ambient`.
+  Numbers on screen match numbers being spoken. Set `visual_style: gradient` for
+  the plain look; any scene failure auto-falls back to it.
 - **Hook card at frame 0** — the hook text sits at the top of the screen from the
   first frame until the spoken hook ends. The seed-audience swipe decision happens
   in the first second; the promise must be readable before a word is spoken.
@@ -100,7 +108,14 @@ YouTube's free **API audit** are locked private. Two ways to run:
 
 ```bash
 python run.py analyze     # pulls views/retention per video, updates learned priors
+python run.py diagnose    # Claude dissects the channel: issues + upcoming roadblocks
 ```
+
+`diagnose` hands Claude everything the system knows — per-video retention, hook/format/
+length breakdowns, learned priors, discard reasons, publish errors, monetization
+progress vs the 500/1,000-sub thresholds — and returns a dated markdown report
+(`data/reports/`) with evidence-based issues, upcoming roadblocks, and exact
+`config.yaml` tweaks. Run it weekly.
 
 Performance index `P = 0.6·retention + 0.3·reach + 0.1·engagement` updates an EMA
 prior for every (hook_type, format, length) combination. Future ideas that match
@@ -131,6 +146,11 @@ it's one command.
 With `review.required: true` (default), the cron run produces + schedules but the
 review step stays yours: check the queue once a day, approve, done. That human pass
 is deliberate — it's your quality gate *and* your policy shield.
+
+**Autopilot:** set `review.auto_above: 0.72` and videos scoring at or above that
+flow straight to upload with zero touch — research → script → render → schedule →
+comment — while lower scorers still wait in the queue. Raise the floor if quality
+slips; the weekly `diagnose` report will tell you.
 
 ## Configuration
 
@@ -169,9 +189,11 @@ studio/
 │   ├── ideate.py     # stage-1 scoring & epsilon-greedy selection
 │   ├── scriptgen.py  # structured scripts + the retention-contract validator
 │   ├── voice.py      # kokoro / edge / mock TTS with word timings
-│   ├── captions.py   # karaoke .ass subtitles
+│   ├── captions.py   # karaoke .ass subtitles + frame-0 hook card
+│   ├── scenes.py     # native story graphics (stats/charts/timelines/figures)
 │   ├── visuals.py    # procedural themes (gradient/grain/vignette/progress bar)
-│   ├── render.py     # ffmpeg assembly -> 1080x1920 h264
+│   ├── render.py     # ffmpeg assembly -> 1080x1920 h264 (story + gradient paths)
+│   ├── diagnose.py   # Claude reads the channel's analytics -> issues/roadblocks report
 │   ├── metadata.py   # titles/descriptions/tags + AI disclosure
 │   ├── review.py     # human approval gate
 │   ├── publish.py    # 2-channel scheduled uploads, quota-aware; export mode

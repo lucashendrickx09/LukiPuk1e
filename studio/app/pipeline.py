@@ -9,7 +9,8 @@ import re
 import time
 from pathlib import Path
 
-from . import formula, ideate, publish, review, scriptgen, voice as voice_mod, render as render_mod, visuals
+from . import (formula, ideate, publish, review, scenes as scenes_mod, scriptgen,
+               voice as voice_mod, render as render_mod, visuals)
 
 
 def _slug(text: str, maxlen: int = 40) -> str:
@@ -27,6 +28,58 @@ def _hook_end(script, words) -> float:
         return 2.5
     idx = min(len(script.hook.split()), len(words)) - 1
     return min(max(words[idx].end, 1.5), 4.0)
+
+
+def _segment_ends(script, words) -> list[float]:
+    """End time (voice timeline) of each visual segment: hook, each beat, payoff+loop.
+    Approximate word-count mapping into the TTS token timeline, kept ascending."""
+    counts = ([len(script.hook.split())]
+              + [len(b.split()) for b in script.beats]
+              + [len((script.payoff + " " + script.loop_line).split())])
+    ends: list[float] = []
+    cum = 0
+    for c in counts:
+        cum += c
+        if words:
+            t = words[min(cum, len(words)) - 1].end
+        else:
+            t = (len(ends) + 1) * 3.0
+        if ends and t <= ends[-1] + 0.5:
+            t = ends[-1] + 0.5
+        ends.append(t)
+    if words:
+        ends[-1] = max(ends[-1], words[-1].end)
+    return ends
+
+
+def _aligned_scenes(script) -> list[dict]:
+    """One scene per segment (hook + beats + payoff): pad with ambient, drop extras."""
+    need = 2 + len(script.beats)
+    empty = {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "", "points": []}
+    out = [dict(empty, **s) for s in (script.scenes or [])[:need] if isinstance(s, dict)]
+    while len(out) < need:
+        out.append(dict(empty))
+    return out
+
+
+def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=None):
+    """Scenes style with graceful fallback to the plain gradient renderer."""
+    theme = visuals.theme_for(channel.theme)
+    hook_kwargs = dict(hook_text=script.hook, hook_seconds=_hook_end(script, words))
+    if channel.visual_style == "scenes":
+        try:
+            scene_list = _aligned_scenes(script)
+            seg_ends = _segment_ends(script, words)
+            pngs = []
+            for i, sc in enumerate(scene_list):
+                pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png"))
+            return render_mod.render_story(wav, words, pngs, seg_ends, out_mp4,
+                                           theme=theme, workdir=workdir, **hook_kwargs)
+        except Exception as e:
+            if log:
+                log("scenes_fallback", f"{out_mp4.name}: {e}")
+    return render_mod.render(wav, words, out_mp4, theme=theme, seed=seed,
+                             workdir=workdir, **hook_kwargs)
 
 
 def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) -> int | None:
@@ -65,10 +118,9 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
 
     out_mp4 = cfg.data_dir / "renders" / f"{channel.name}_{video_id}_{_slug(script.title)}.mp4"
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
-    theme = visuals.theme_for(channel.theme)
     seed = video_id * 7919 + int(time.time()) % 7919
-    path, duration = render_mod.render(wav, words, out_mp4, theme=theme, seed=seed, workdir=workdir,
-                                       hook_text=script.hook, hook_seconds=_hook_end(script, words))
+    path, duration = _render_final(cfg, channel, script, wav, words, out_mp4,
+                                   workdir, seed, log=ledger.log)
 
     ledger.set_video(video_id, video_path=str(path), duration=duration, status="rendered")
     ledger.log("rendered", f"video {video_id} ({duration:.1f}s) -> {path}")
@@ -103,6 +155,14 @@ def run_daily(cfg, ledger, client=None, engine=None, dry_run_publish: bool = Fal
         if not cfg.review_required:
             for vid in made:
                 review.approve(ledger, vid)
+        elif cfg.review_auto_above is not None:
+            # autopilot with a floor: high-scoring videos flow straight through,
+            # everything else still waits for a human
+            for vid in made:
+                row = ledger.video(vid)
+                if row and row["status"] == "rendered" and row["score"] >= cfg.review_auto_above:
+                    review.approve(ledger, vid)
+                    ledger.log("auto_approved", f"video {vid} (score {row['score']:.2f})")
         published = publish.publish_approved(cfg, ledger, channel, dry_run=dry_run_publish)
         went_live = []
         try:
@@ -130,16 +190,29 @@ def sample_video(cfg, ledger, channel, out: Path | None = None) -> Path:
     """Render a style-preview short with the mock voice and a canned script —
     lets you see the channel's look before spending anything."""
     script = scriptgen.Script(
-        hook="This 30 second video cost exactly zero dollars to make",
+        hook="Sam Walton was broke at 44 and worth billions at 67",
         beats=[
-            "The background is generated math, not stock footage.",
-            "The captions time themselves to every spoken word.",
-            "A formula scored this script before it was allowed to render.",
+            "In 1962 he opened one discount store in Rogers, Arkansas.",
+            "His trick: sell cheaper than anyone and make it up on volume.",
+            "By 1985 Forbes named him the richest man in America.",
         ],
-        payoff="Everything you just watched came from one command on a laptop.",
-        loop_line="And the next zero dollar video starts now.",
-        title="Style preview", description="Sample render.", tags=["preview"],
-        hook_type="stat_shock", format="explainer",
+        payoff="One store became eleven thousand, all from refusing to raise prices.",
+        loop_line="And at 44, everyone thought Sam was finished.",
+        title="Broke at 44, richest man in America by 67",
+        description="The Sam Walton playbook.", tags=["business", "money", "story"],
+        hook_type="stat_shock", format="story",
+        pin_comment="Would you bet everything on one store at 44?",
+        scenes=[
+            {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "", "points": []},
+            {"kind": "timeline", "headline": "", "sub": "1945 Ben Franklin store;1962 Walmart #1;1970 IPO",
+             "value": "", "label": "", "points": []},
+            {"kind": "big_stat", "headline": "", "sub": "", "value": "-3%",
+             "label": "priced below every competitor", "points": []},
+            {"kind": "chart_up", "headline": "Walmart stores", "sub": "",
+             "value": "", "label": "1962 to 1985", "points": [1, 24, 125, 276, 640, 882]},
+            {"kind": "figure", "headline": "Sam Walton", "sub": "", "value": "$2.8B",
+             "label": "net worth, 1985", "points": []},
+        ],
     )
     engine = voice_mod.MockEngine()
     workdir = cfg.data_dir / "build" / f"{channel.name}_sample"
@@ -148,7 +221,5 @@ def sample_video(cfg, ledger, channel, out: Path | None = None) -> Path:
     words, _ = engine.synth(script.spoken_text(), channel.voice, wav)
     out = out or cfg.data_dir / "renders" / f"{channel.name}_sample.mp4"
     out.parent.mkdir(parents=True, exist_ok=True)
-    path, _ = render_mod.render(wav, words, out, theme=visuals.theme_for(channel.theme),
-                                seed=42, workdir=workdir,
-                                hook_text=script.hook, hook_seconds=_hook_end(script, words))
+    path, _ = _render_final(cfg, channel, script, wav, words, out, workdir, seed=42)
     return path

@@ -8,6 +8,7 @@
   python run.py review              # list queue; approve/reject from here
   python run.py publish             # schedule approved videos to YouTube slots
   python run.py analyze             # pull analytics + update the formula weights
+  python run.py diagnose            # Claude dissects the channel: issues + roadblocks
   python run.py run                 # the full daily loop (cron this)
   python run.py auth CHANNEL        # one-time OAuth per channel
   python run.py status              # ledger counts + upcoming posts
@@ -20,7 +21,7 @@ import json
 import shutil
 import sys
 
-from app import analytics, config, ideate, ledger as ledger_mod, pipeline, publish, review
+from app import analytics, config, diagnose, ideate, ledger as ledger_mod, pipeline, publish, review
 
 
 def get_ctx(args):
@@ -157,6 +158,20 @@ def cmd_analyze(args):
     return 0
 
 
+def cmd_diagnose(args):
+    cfg, led = get_ctx(args)
+    for ch in channels_for(cfg, args):
+        try:
+            analytics.pull(cfg, led, ch)
+        except Exception:
+            pass  # diagnosis still runs from whatever the ledger has
+        text, path = diagnose.run_diagnosis(cfg, led, ch)
+        print(text)
+        if path:
+            print(f"\n[saved to {path}]")
+    return 0
+
+
 def cmd_run(args):
     cfg, led = get_ctx(args)
     summary = pipeline.run_daily(cfg, led, dry_run_publish=args.dry_run)
@@ -209,6 +224,8 @@ def main(argv=None):
     sp.set_defaults(fn=cmd_publish)
 
     sp = sub.add_parser("analyze"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_analyze)
+
+    sp = sub.add_parser("diagnose"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_diagnose)
 
     sp = sub.add_parser("run"); sp.add_argument("--dry-run", action="store_true"); sp.set_defaults(fn=cmd_run)
 
