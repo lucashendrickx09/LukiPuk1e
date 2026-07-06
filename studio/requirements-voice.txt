@@ -1,0 +1,6 @@
+# Local, free, high-quality TTS (Kokoro-82M, Apache-2.0). CPU is fine.
+kokoro>=0.9
+soundfile
+numpy
+# Fallback engine (network, free):
+edge-tts>=6.1

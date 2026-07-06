@@ -1,0 +1,63 @@
+# Shorts Studio configuration
+# Two channels, two niches — one Google account can own both (brand channels),
+# but give EACH its own Google Cloud project (client_secret_file) to double the
+# free upload quota and isolate API audits. See README.md.
+
+model: claude-opus-4-8
+
+channels:
+  - name: channel_a
+    handle: ""                      # your @handle (informational)
+    niche: finance                  # drives the RPM component of the formula
+    audience: US
+    persona: "calm, sharp money explainer who respects the viewer's intelligence"
+    voice: af_heart                 # kokoro voice (edge fallback: en-US-AriaNeural)
+    voice_rate: 1.08
+    theme: midnight
+    slots: ["12:30", "19:30"]       # viewer-local peak windows
+    timezone: America/New_York
+    category_id: "27"               # Education
+    client_secret_file: secrets/channel_a_client_secret.json
+    token_file: secrets/channel_a_token.json
+    seed_topics:                    # evergreen bank — used when research is thin
+      - "the 50 30 20 budget rule most people apply backwards"
+      - "why your first 10k is the hardest money you will ever make"
+      - "the checking account mistake that quietly costs 400 dollars a year"
+
+  - name: channel_b
+    handle: ""
+    niche: psychology
+    audience: US
+    persona: "curious, slightly mischievous explainer of how minds actually work"
+    voice: am_michael               # kokoro voice (edge fallback: en-US-ChristopherNeural)
+    voice_rate: 1.08
+    theme: royal
+    slots: ["13:00", "20:00"]
+    timezone: America/New_York
+    category_id: "27"
+    client_secret_file: secrets/channel_b_client_secret.json
+    token_file: secrets/channel_b_token.json
+    seed_topics:
+      - "the psychology trick restaurants use on the second cheapest wine"
+      - "why your brain rewrites memories every single time you recall them"
+      - "the 20 second rule that beats willpower every time"
+
+formula:
+  weights_stage1: {trend: 0.30, rpm: 0.25, novelty: 0.20, prior: 0.25}
+  weights_stage2: {idea: 0.45, hook: 0.30, retention: 0.25}
+  epsilon: 0.20                     # exploration share (keeps the formula discovering)
+  script_threshold: 0.55            # below this, a script is discarded, not rendered
+  target_seconds: [18, 40]
+
+cadence:
+  videos_per_day: 2                 # per channel; matches the 2 slots above
+
+review:
+  required: true                    # nothing posts without your approval
+
+voice:
+  engine: auto                      # auto | kokoro | edge | mock
+
+publishing:
+  mode: api                         # api | export (export = ready-to-post folder)
+  min_lead_minutes: 45
