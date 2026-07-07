@@ -46,7 +46,8 @@ def build_command(voice_wav: Path, ass_path: Path, out_mp4: Path, theme: dict,
 def build_story_command(scene_durs: list[tuple[Path, float]], voice_wav: Path,
                         ass_path: Path, out_mp4: Path, theme: dict,
                         total_duration: float,
-                        emoji_overlays: list[tuple[Path, float, float]] | None = None) -> list[str]:
+                        emoji_overlays: list[tuple[Path, float, float]] | None = None,
+                        sfx_events: list[tuple[Path, float, float]] | None = None) -> list[str]:
     """ffmpeg argv for the story path: one looped input per scene PNG, per-scene
     zoompan with a punch-in settle on every cut (impact) then slow drift, hard
     cuts via concat, animated emoji pops, then the shared grade
@@ -85,18 +86,35 @@ def build_story_command(scene_durs: list[tuple[Path, float]], voice_wav: Path,
         prev = f"bg{j + 1}"
 
     vf = visuals.video_filters(theme, total_duration, str(ass_path))
-    audio = (f"[{n}:a]adelay={int(LEAD_IN*1000)}|{int(LEAD_IN*1000)},apad,"
-             f"loudnorm=I=-14:TP=-1.5:LRA=11[a]")
-    filter_complex = ";".join(chains + [f"[{prev}]{vf}[v]", audio])
+    sfx_events = sfx_events or []
+    audio_chains = [f"[{n}:a]adelay={int(LEAD_IN*1000)}|{int(LEAD_IN*1000)},apad[vo]"]
+    mix_labels = ["[vo]"]
+    for k, (wav, at, gain) in enumerate(sfx_events):
+        idx = n + 1 + len(emoji_overlays) + k  # scenes, voice, emojis, then sfx
+        ms = int(at * 1000)
+        audio_chains.append(f"[{idx}:a]adelay={ms}|{ms},volume={gain:.2f}[fx{k}]")
+        mix_labels.append(f"[fx{k}]")
+    if sfx_events:
+        audio_chains.append("".join(mix_labels)
+                            + f"amix=inputs={len(mix_labels)}:normalize=0,"
+                            f"loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    else:
+        audio_chains = [f"[{n}:a]adelay={int(LEAD_IN*1000)}|{int(LEAD_IN*1000)},apad,"
+                        f"loudnorm=I=-14:TP=-1.5:LRA=11[a]"]
+    filter_complex = ";".join(chains + [f"[{prev}]{vf}[v]"] + audio_chains)
 
     emoji_inputs: list[str] = []
     for png, t0, t1 in emoji_overlays:
         emoji_inputs += ["-loop", "1", "-t", f"{total_duration:.3f}", "-i", str(png)]
+    sfx_inputs: list[str] = []
+    for wav, at, gain in sfx_events:
+        sfx_inputs += ["-i", str(wav)]
     return [
         "ffmpeg", "-y", "-loglevel", "error",
         *inputs,
         "-i", str(voice_wav),
         *emoji_inputs,
+        *sfx_inputs,
         "-filter_complex", filter_complex,
         "-map", "[v]", "-map", "[a]",
         "-t", f"{total_duration:.3f}",
@@ -112,10 +130,12 @@ def render_story(voice_wav: Path, words: list[Word], scene_files: list[Path],
                  seg_ends: list[float], out_mp4: Path, *, theme: dict,
                  hook_text: str | None = None, hook_seconds: float | None = None,
                  segment_emojis: list[str] | None = None,
+                 sfx_dir: Path | None = None,
                  workdir: Path | None = None) -> tuple[Path, float]:
     """Render the story-scene version of a short. seg_ends are per-segment end
     times on the voice timeline (one per scene, ascending). segment_emojis (same
-    length) pop in near the bottom third for the duration of their segment."""
+    length) pop in near the bottom third for the duration of their segment.
+    sfx_dir enables sound effects (whoosh on cuts, pop on emoji lands)."""
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not found — install it (brew install ffmpeg / apt install ffmpeg)")
     if len(scene_files) != len(seg_ends):
@@ -151,8 +171,23 @@ def render_story(voice_wav: Path, words: list[Word], scene_files: list[Path],
                     overlays.append((png, start + 0.10, start + dur - 0.08))
             start += dur
 
+    events: list[tuple[Path, float, float]] = []
+    if sfx_dir is not None:
+        try:
+            from . import sfx as sfx_mod
+            bank = sfx_mod.ensure(sfx_dir)
+            cuts = []
+            acc = 0.0
+            for d in durs[:-1]:
+                acc += d
+                cuts.append(acc)
+            events = sfx_mod.story_events(cuts, [t0 for _, t0, _ in overlays], bank)
+        except Exception:
+            events = []  # sound is enhancement, never a render blocker
+
     cmd = build_story_command(list(zip(scene_files, durs)), voice_wav, ass_path,
-                              out_mp4, theme, total, emoji_overlays=overlays)
+                              out_mp4, theme, total, emoji_overlays=overlays,
+                              sfx_events=events)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg failed:\n{proc.stderr[-2000:]}")

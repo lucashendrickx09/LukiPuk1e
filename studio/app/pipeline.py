@@ -77,6 +77,7 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
             return render_mod.render_story(wav, words, pngs, seg_ends, out_mp4,
                                            theme=theme, workdir=workdir,
                                            segment_emojis=[s.get("emoji", "") for s in scene_list],
+                                           sfx_dir=(cfg.data_dir / "sfx") if cfg.sfx else None,
                                            **hook_kwargs)
         except Exception as e:
             if log:

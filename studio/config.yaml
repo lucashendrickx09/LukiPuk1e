@@ -62,6 +62,9 @@ review:
 voice:
   engine: auto                      # auto | kokoro | edge | mock
 
+sound:
+  effects: true                     # whoosh on scene cuts + pop when emojis land
+
 publishing:
   mode: api                         # api | export (export = ready-to-post folder)
   min_lead_minutes: 45

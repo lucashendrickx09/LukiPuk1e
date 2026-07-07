@@ -65,8 +65,9 @@ class Config:
     videos_per_day: int = 2          # per channel (2 slots)
     review_required: bool = True     # nothing publishes without human approval
     review_auto_above: float | None = None  # auto-approve videos scoring >= this (full autopilot)
-    # voice
+    # voice / sound
     tts_engine: str = "auto"         # auto | kokoro | edge | mock
+    sfx: bool = True                 # whoosh on cuts + pop on emoji lands
     # publishing
     publish_mode: str = "api"        # api | export  (export = pack for manual upload)
     min_lead_minutes: int = 45       # earliest schedulable slot from "now"
@@ -128,6 +129,7 @@ def load_config(path: str | Path | None = None) -> Config:
         review_auto_above=(float(raw["review"]["auto_above"])
                            if raw.get("review", {}).get("auto_above") is not None else None),
         tts_engine=raw.get("voice", {}).get("engine", "auto"),
+        sfx=bool(raw.get("sound", {}).get("effects", True)),
         publish_mode=publishing.get("mode", "api"),
         min_lead_minutes=int(publishing.get("min_lead_minutes", 45)),
     )

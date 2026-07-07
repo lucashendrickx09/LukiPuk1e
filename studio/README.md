@@ -105,7 +105,13 @@ YouTube's free **API audit** are locked private. Two ways to run:
   no-emoji silently if absent.
 - **Punch-in cuts** — every scene cut lands slightly zoomed and snaps to rest in
   6 frames, then drifts; nothing on screen ever sits still.
+- **Sound design** — a synthesized whoosh under every scene cut and a pop when
+  each emoji lands, mixed conservatively under the voice (`sound.effects` in
+  config). Pure ffmpeg synthesis: no sample packs, no licenses.
 - **Retention progress bar** along the bottom edge.
+
+**New machine? `bash setup.sh` then follow [`LAUNCH.md`](LAUNCH.md)** — the
+step-by-step runbook from clean laptop to autopilot.
 - **Engagement comment** — every script includes a `pin_comment` (a question that's
   effortless to answer). When a scheduled video goes public, the pipeline posts it
   as the channel's own comment (comments are an algorithm signal). The API can't
