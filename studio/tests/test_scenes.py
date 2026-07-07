@@ -64,6 +64,50 @@ def test_build_story_command_structure(tmp_path):
     assert "-t 3.000" in joined and "-t 4.500" in joined  # per-scene input durations
 
 
+def test_emoji_rasterizes_or_degrades(tmp_path):
+    im = scenes.emoji_image("💰", 190)
+    if scenes._emoji_font()[0] is None:
+        assert im is None  # no color-emoji font: graceful skip
+    else:
+        assert im is not None and im.height == 190 and im.mode == "RGBA"
+        png = scenes.emoji_png("📈🔥", 190, tmp_path / "e.png")
+        assert png is not None and png.stat().st_size > 500
+
+
+def test_emoji_empty_returns_none():
+    assert scenes.emoji_image("", 100) is None
+    assert scenes.emoji_image("   ", 100) is None
+
+
+def test_story_command_includes_emoji_overlays(tmp_path):
+    from PIL import Image
+    e = tmp_path / "emoji.png"
+    Image.new("RGBA", (100, 100), (255, 0, 0, 200)).save(e)
+    pairs = [(tmp_path / "s0.png", 3.0), (tmp_path / "s1.png", 4.5)]
+    cmd = render.build_story_command(pairs, tmp_path / "v.wav", tmp_path / "c.ass",
+                                     tmp_path / "o.mp4", THEME, 7.5,
+                                     emoji_overlays=[(e, 0.1, 2.9), (e, 3.1, 7.4)])
+    joined = " ".join(cmd)
+    assert joined.count("overlay=") == 2
+    assert "between(t,0.100,2.900)" in joined
+    assert "exp(-9*(t-3.100))" in joined  # the drop-in settle
+    # punch-in on every cut
+    assert "1.14-0.02*on" in joined
+
+
+def test_caption_bounce_and_number_emphasis(tmp_path):
+    from app import captions
+    words = [Word("banks", 0.0, 0.4), Word("$400", 0.4, 0.9), Word("gone", 0.9, 1.3)]
+    out = captions.build_ass(words, tmp_path / "t.ass", hook_text="hey", hook_until=1.0)
+    text = out.read_text()
+    assert "\\t(0,80,\\fscx110" in text          # chunk bounce-in
+    assert "\\fs136" in text                     # $400 pops bigger (112 * 1.22)
+    assert "\\fscx84\\fscy84" in text            # hook card settle
+    # animation off produces clean karaoke only
+    out2 = captions.build_ass(words, tmp_path / "t2.ass", animate=False)
+    assert "\\t(" not in out2.read_text()
+
+
 @pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
 def test_story_render_end_to_end(tmp_path):
     words = [Word(w, i * 0.4, (i + 1) * 0.4) for i, w in enumerate(
@@ -77,7 +121,7 @@ def test_story_render_end_to_end(tmp_path):
     seg_ends = [1.6, words[-1].end]
     out, dur = render.render_story(wav, words, pngs, seg_ends, tmp_path / "story.mp4",
                                    theme=THEME, hook_text="Broke at 44", hook_seconds=1.6,
-                                   workdir=tmp_path)
+                                   segment_emojis=["💰", "📈"], workdir=tmp_path)
     assert out.exists() and out.stat().st_size > 10_000
     expected = words[-1].end + render.LEAD_IN + render.TAIL
     assert abs(dur - expected) < 0.6

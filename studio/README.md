@@ -96,7 +96,15 @@ YouTube's free **API audit** are locked private. Two ways to run:
 - **Hook card at frame 0** — the hook text sits at the top of the screen from the
   first frame until the spoken hook ends. The seed-audience swipe decision happens
   in the first second; the promise must be readable before a word is spoken.
-- **Karaoke captions** mid-screen, word-timed to the voice.
+- **Karaoke captions with bounce** — every caption chunk pops in with a scale
+  overshoot and a tiny tilt; money/number words render ~22% bigger.
+- **Emoji layer** — Claude assigns each scene an emoji; it pops in below the
+  captions with a drop-and-bob animation while the segment is spoken, and scenes
+  with a free top corner get it baked into the card too. Needs a color-emoji font
+  (`fonts-noto-color-emoji` on Linux, Apple Color Emoji on macOS) — degrades to
+  no-emoji silently if absent.
+- **Punch-in cuts** — every scene cut lands slightly zoomed and snaps to rest in
+  6 frames, then drifts; nothing on screen ever sits still.
 - **Retention progress bar** along the bottom edge.
 - **Engagement comment** — every script includes a `pin_comment` (a question that's
   effortless to answer). When a scheduled video goes public, the pipeline posts it

@@ -32,6 +32,10 @@ _FONT_PATHS = [
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
 ]
+_EMOJI_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",   # linux (fonts-noto-color-emoji)
+    "/System/Library/Fonts/Apple Color Emoji.ttc",         # macOS
+]
 
 
 @lru_cache(maxsize=64)
@@ -42,6 +46,49 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
         except OSError:
             continue
     return ImageFont.load_default(size=size)
+
+
+@lru_cache(maxsize=1)
+def _emoji_font() -> tuple[ImageFont.FreeTypeFont | None, int]:
+    """Color-emoji fonts are bitmap strikes — only specific sizes load."""
+    for path in _EMOJI_PATHS:
+        for size in (160, 137, 128, 109, 96, 72, 64, 48, 32):
+            try:
+                return ImageFont.truetype(path, size), size
+            except OSError:
+                continue
+    return None, 0
+
+
+def emoji_image(emoji: str, px: int) -> Image.Image | None:
+    """Rasterize 1-2 emoji to a transparent RGBA image `px` tall. None if no
+    color-emoji font is installed (callers degrade gracefully)."""
+    emoji = emoji.strip()
+    f, native = _emoji_font()
+    if not f or not emoji:
+        return None
+    canvas = Image.new("RGBA", (native * (len(emoji) + 1), native * 2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(canvas)
+    try:
+        d.text((canvas.width // 2, canvas.height // 2), emoji, font=f,
+               embedded_color=True, anchor="mm")
+    except Exception:
+        return None
+    box = canvas.getbbox()
+    if not box:
+        return None
+    im = canvas.crop(box)
+    scale = px / im.height
+    return im.resize((max(1, int(im.width * scale)), px), Image.LANCZOS)
+
+
+def emoji_png(emoji: str, px: int, out_png: str | Path) -> Path | None:
+    im = emoji_image(emoji, px)
+    if im is None:
+        return None
+    out_png = Path(out_png)
+    im.save(out_png, "PNG")
+    return out_png
 
 
 def _rgb(hex_rgb: str) -> tuple[int, int, int]:
@@ -286,5 +333,14 @@ def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path) -> Pa
     im = _background(theme, seed)
     d = ImageDraw.Draw(im, "RGBA")
     _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+    # bake the emoji into the card only when the top zone is free of text —
+    # other kinds still get the animated pop-in emoji at render time
+    if scene.get("kind", "ambient") in ("ambient", "big_stat", "quote"):
+        em = emoji_image(scene.get("emoji", ""), 250)
+        if em is not None:  # tilted; rides the zoom with the scene
+            em = em.rotate(rng.uniform(-14, 14), expand=True, resample=Image.BICUBIC)
+            x = SCENE_W - em.width - rng.randint(90, 150)
+            y = rng.randint(150, 230)
+            im.paste(em, (x, y), em)
     im.convert("RGB").save(out_png, "PNG")
     return out_png

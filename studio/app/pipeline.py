@@ -55,7 +55,8 @@ def _segment_ends(script, words) -> list[float]:
 def _aligned_scenes(script) -> list[dict]:
     """One scene per segment (hook + beats + payoff): pad with ambient, drop extras."""
     need = 2 + len(script.beats)
-    empty = {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "", "points": []}
+    empty = {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "",
+             "points": [], "emoji": ""}
     out = [dict(empty, **s) for s in (script.scenes or [])[:need] if isinstance(s, dict)]
     while len(out) < need:
         out.append(dict(empty))
@@ -74,7 +75,9 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
             for i, sc in enumerate(scene_list):
                 pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png"))
             return render_mod.render_story(wav, words, pngs, seg_ends, out_mp4,
-                                           theme=theme, workdir=workdir, **hook_kwargs)
+                                           theme=theme, workdir=workdir,
+                                           segment_emojis=[s.get("emoji", "") for s in scene_list],
+                                           **hook_kwargs)
         except Exception as e:
             if log:
                 log("scenes_fallback", f"{out_mp4.name}: {e}")
@@ -203,15 +206,17 @@ def sample_video(cfg, ledger, channel, out: Path | None = None) -> Path:
         hook_type="stat_shock", format="story",
         pin_comment="Would you bet everything on one store at 44?",
         scenes=[
-            {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "", "points": []},
+            {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "",
+             "points": [], "emoji": "🤯"},
             {"kind": "timeline", "headline": "", "sub": "1945 Ben Franklin store;1962 Walmart #1;1970 IPO",
-             "value": "", "label": "", "points": []},
+             "value": "", "label": "", "points": [], "emoji": "🏪"},
             {"kind": "big_stat", "headline": "", "sub": "", "value": "-3%",
-             "label": "priced below every competitor", "points": []},
+             "label": "priced below every competitor", "points": [], "emoji": "🏷️"},
             {"kind": "chart_up", "headline": "Walmart stores", "sub": "",
-             "value": "", "label": "1962 to 1985", "points": [1, 24, 125, 276, 640, 882]},
+             "value": "", "label": "1962 to 1985", "points": [1, 24, 125, 276, 640, 882],
+             "emoji": "📈"},
             {"kind": "figure", "headline": "Sam Walton", "sub": "", "value": "$2.8B",
-             "label": "net worth, 1985", "points": []},
+             "label": "net worth, 1985", "points": [], "emoji": "👑💰"},
         ],
     )
     engine = voice_mod.MockEngine()

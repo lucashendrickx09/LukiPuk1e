@@ -27,8 +27,10 @@ SCENE_SCHEMA = {
         "label": {"type": "string", "description": "small caption under the value/chart; empty if unused"},
         "points": {"type": "array", "items": {"type": "number"},
                    "description": "chart_up y-values, 4-8 rising numbers; empty list if unused"},
+        "emoji": {"type": "string",
+                  "description": "1-2 emoji that visualize this segment — they pop on screen while it's spoken (e.g. '💰', '📈🔥', '🤯'). Empty string only if nothing fits."},
     },
-    "required": ["kind", "headline", "sub", "value", "label", "points"],
+    "required": ["kind", "headline", "sub", "value", "label", "points", "emoji"],
     "additionalProperties": False,
 }
 
@@ -89,7 +91,10 @@ that best VISUALIZES the segment being spoken over it:
 - list_reveal: 2-4 punchy items, sub = "item one;item two;item three"
 - figure: a stylized person card — headline = name, value = their number
   (e.g. '$5.9B'), label = who/when
-Numbers in scenes must match numbers spoken in the segment."""
+Numbers in scenes must match numbers spoken in the segment. Give almost every
+scene an emoji — it pops on screen while the segment is spoken and is part of
+the channel's eye-catching style. Pick emoji that amplify the emotion of the
+beat (money, shock, growth, fire), not decoration for its own sake."""
 
 USER_PROMPT = """Topic: {topic}
 Angle: {angle}
