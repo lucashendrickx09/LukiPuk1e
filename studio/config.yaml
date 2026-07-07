@@ -13,7 +13,7 @@ channels:
     persona: "calm, sharp money explainer who respects the viewer's intelligence"
     voice: af_heart                 # kokoro voice (edge fallback: en-US-AriaNeural)
     voice_rate: 1.08
-    theme: midnight
+    theme: noir                     # green/white on near-black, starfield
     visual_style: scenes            # scenes = animated story graphics | gradient = plain
     slots: ["12:30", "19:30"]       # viewer-local peak windows
     timezone: America/New_York
@@ -32,7 +32,7 @@ channels:
     persona: "curious, slightly mischievous explainer of how minds actually work"
     voice: am_michael               # kokoro voice (edge fallback: en-US-ChristopherNeural)
     voice_rate: 1.08
-    theme: royal
+    theme: noir
     visual_style: scenes
     slots: ["13:00", "20:00"]
     timezone: America/New_York

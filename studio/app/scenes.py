@@ -153,16 +153,31 @@ def _background(theme: dict, seed: int) -> Image.Image:
     overlay = Image.new("RGBA", (SCENE_W, SCENE_H), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
     accent = _rgb(theme["accent"])
-    for _ in range(rng.randint(3, 5)):
+    stars = bool(theme.get("stars"))
+    for _ in range(rng.randint(1, 2) if stars else rng.randint(3, 5)):
         r = rng.randint(120, 520)
         x, y = rng.randint(-100, SCENE_W + 100), rng.choice(
             [rng.randint(-100, 500), rng.randint(1900, SCENE_H + 100)])
-        od.ellipse([x - r, y - r, x + r, y + r], outline=(*accent, rng.randint(16, 44)),
+        od.ellipse([x - r, y - r, x + r, y + r], outline=(*accent, rng.randint(10, 26) if stars else rng.randint(16, 44)),
                    width=rng.randint(2, 7))
-    for _ in range(2):
-        r = rng.randint(260, 620)
-        x, y = rng.randint(0, SCENE_W), rng.choice([rng.randint(0, 400), rng.randint(2000, SCENE_H)])
-        od.ellipse([x - r, y - r, x + r, y + r], fill=(*_mix(c[1], accent, 0.3), 12))
+    if stars:
+        # a field of miniscule stars: mostly white pinpricks, a few accent, rare sparkles
+        for _ in range(rng.randint(110, 160)):
+            x, y = rng.randint(0, SCENE_W), rng.randint(0, SCENE_H)
+            r = rng.choice([1, 1, 1, 1, 2, 2, 3])
+            col = accent if rng.random() < 0.18 else (255, 255, 255)
+            od.ellipse([x - r, y - r, x + r, y + r], fill=(*col, rng.randint(36, 150)))
+        for _ in range(rng.randint(3, 6)):  # 4-point sparkles
+            x, y = rng.randint(60, SCENE_W - 60), rng.randint(60, SCENE_H - 60)
+            s = rng.randint(9, 18)
+            col = accent if rng.random() < 0.4 else (255, 255, 255)
+            od.line([(x - s, y), (x + s, y)], fill=(*col, 90), width=2)
+            od.line([(x, y - s), (x, y + s)], fill=(*col, 90), width=2)
+    else:
+        for _ in range(2):
+            r = rng.randint(260, 620)
+            x, y = rng.randint(0, SCENE_W), rng.choice([rng.randint(0, 400), rng.randint(2000, SCENE_H)])
+            od.ellipse([x - r, y - r, x + r, y + r], fill=(*_mix(c[1], accent, 0.3), 12))
     im = Image.alpha_composite(im.convert("RGBA"), overlay)
     return im
 

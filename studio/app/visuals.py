@@ -11,7 +11,10 @@ from __future__ import annotations
 import random
 
 # Each theme: gradient colors (3), caption accent, progress bar color.
+# "stars": scatter tiny stars into the background (scene renderer).
 THEMES = {
+    "noir":     {"colors": ["#050606", "#0B0D0C", "#101816"], "accent": "#35E87A", "bar": "#35E87A",
+                 "stars": True},
     "midnight": {"colors": ["#0B1026", "#3B1D5A", "#0E4C92"], "accent": "#FFD400", "bar": "#FFD400"},
     "ember":    {"colors": ["#1A0B0B", "#7A1F1F", "#E25822"], "accent": "#FFE082", "bar": "#FF7043"},
     "forest":   {"colors": ["#07130D", "#14532D", "#1F7A4D"], "accent": "#B9F6CA", "bar": "#69F0AE"},
