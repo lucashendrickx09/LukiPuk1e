@@ -67,6 +67,9 @@ voice:
 sound:
   effects: true                     # whoosh on scene cuts + pop when emojis land
 
+goals:
+  subscribers: 100000               # mission control (run.py web) tracks progress to this
+
 publishing:
   mode: api                         # api | export (export = ready-to-post folder)
   min_lead_minutes: 45

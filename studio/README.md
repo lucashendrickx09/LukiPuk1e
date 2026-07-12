@@ -111,7 +111,20 @@ YouTube's free **API audit** are locked private. Two ways to run:
 - **Retention progress bar** along the bottom edge.
 
 **New machine? `bash setup.sh` then follow [`LAUNCH.md`](LAUNCH.md)** — the
-step-by-step runbook from clean laptop to autopilot.
+step-by-step runbook from clean laptop to autopilot. The growth strategy lives in
+[`METHOD.md`](METHOD.md) (the 100K method) and the identities in [`BRAND.md`](BRAND.md).
+
+## Mission control (the website)
+
+```bash
+python run.py web        # http://localhost:8787 — works from your phone on the same Wi-Fi
+```
+
+A native dashboard (stdlib server, zero dependencies): live subscriber/views/retention/
+likes vs the 100K goal and monetization tiers, retention-per-video charts against the
+65% gate, the learned formula priors ("what's working and why"), one-click **Claude
+deep analysis** (issues, mistakes, roadblocks — saved to `data/reports/`), the visual
+production method the AI follows, toolchain status, and the recent-video table.
 - **Engagement comment** — every script includes a `pin_comment` (a question that's
   effortless to answer). When a scheduled video goes public, the pipeline posts it
   as the channel's own comment (comments are an algorithm signal). The API can't

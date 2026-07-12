@@ -71,6 +71,8 @@ class Config:
     # publishing
     publish_mode: str = "api"        # api | export  (export = pack for manual upload)
     min_lead_minutes: int = 45       # earliest schedulable slot from "now"
+    # goals (mission control tracks progress against these)
+    goal_subscribers: int = 100_000
 
     def channel(self, name: str) -> ChannelConfig:
         for ch in self.channels:
@@ -132,5 +134,6 @@ def load_config(path: str | Path | None = None) -> Config:
         sfx=bool(raw.get("sound", {}).get("effects", True)),
         publish_mode=publishing.get("mode", "api"),
         min_lead_minutes=int(publishing.get("min_lead_minutes", 45)),
+        goal_subscribers=int(raw.get("goals", {}).get("subscribers", 100_000)),
     )
     return cfg

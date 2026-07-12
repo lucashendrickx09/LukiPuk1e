@@ -211,6 +211,14 @@ def cmd_auth(args):
     return 0
 
 
+def cmd_web(args):
+    from app import webapp
+    cfg = config.load_config(getattr(args, "config", None))
+    webapp.serve_forever(cfg, lambda: ledger_mod.Ledger(cfg.ledger_path),
+                         host=args.host, port=args.port)
+    return 0
+
+
 def cmd_status(args):
     cfg, led = get_ctx(args)
     print("ledger:", dict(led.counts()))
@@ -252,6 +260,10 @@ def main(argv=None):
     sp = sub.add_parser("diagnose"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_diagnose)
 
     sp = sub.add_parser("brand"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_brand)
+
+    sp = sub.add_parser("web")
+    sp.add_argument("--port", type=int, default=8787); sp.add_argument("--host", default="0.0.0.0")
+    sp.set_defaults(fn=cmd_web)
 
     sp = sub.add_parser("run"); sp.add_argument("--dry-run", action="store_true"); sp.set_defaults(fn=cmd_run)
 

@@ -103,7 +103,10 @@ seed-audience test is the game until the algorithm trusts the channels.
 
 ## Phase 5 — steady state (month 2+)
 
-- Weekly: `run.py diagnose` on both channels; act on its "Next actions"
+- Keep mission control running: `python run.py web` → open from any device on
+  your Wi-Fi. Goals, benchmarks, learned priors, Claude deep analysis — one page.
+- Weekly: `run.py diagnose` (or the dashboard's ✦ button) on both channels; act
+  on its "Next actions"
 - Watch monetization progress in the diagnosis report (500 subs → fan funding;
   1,000 subs + 10M Shorts views/90d → 45% ad revenue share)
 - The formula's learned priors get meaningful after ~15–20 published videos per
