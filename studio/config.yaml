@@ -7,10 +7,10 @@ model: claude-opus-4-8
 
 channels:
   - name: channel_a
-    handle: ""                      # your @handle (informational)
-    niche: finance                  # drives the RPM component of the formula
+    handle: "@BrokeToBillions"      # brand kit: see BRAND.md + run.py brand
+    niche: business                 # drives the RPM component of the formula
     audience: US
-    persona: "calm, sharp money explainer who respects the viewer's intelligence"
+    persona: "the narrator of Broke to Billions: calm, precise storyteller of how real people built real fortunes — numbers do the shouting, the narrator never does"
     voice: af_heart                 # kokoro voice (edge fallback: en-US-AriaNeural)
     voice_rate: 1.08
     theme: noir                     # green/white on near-black, starfield
@@ -21,15 +21,17 @@ channels:
     client_secret_file: secrets/channel_a_client_secret.json
     token_file: secrets/channel_a_token.json
     seed_topics:                    # evergreen bank — used when research is thin
-      - "the 50 30 20 budget rule most people apply backwards"
+      - "sam walton was broke at 44 and the richest man in america by 67"
+      - "the scrub daddy pitch every investor laughed at before it made 200 million"
+      - "colonel sanders was rejected 1009 times before kfc at age 65"
       - "why your first 10k is the hardest money you will ever make"
       - "the checking account mistake that quietly costs 400 dollars a year"
 
   - name: channel_b
-    handle: ""
+    handle: "@TheBrainGlitch"
     niche: psychology
     audience: US
-    persona: "curious, slightly mischievous explainer of how minds actually work"
+    persona: "the narrator of Brain Glitch: playful, sharp guide to the bugs in human wiring — shows you the magic, then tells you the trick"
     voice: am_michael               # kokoro voice (edge fallback: en-US-ChristopherNeural)
     voice_rate: 1.08
     theme: noir

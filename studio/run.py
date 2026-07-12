@@ -21,7 +21,7 @@ import json
 import shutil
 import sys
 
-from app import analytics, config, diagnose, ideate, ledger as ledger_mod, pipeline, publish, review
+from app import analytics, brand, config, diagnose, ideate, ledger as ledger_mod, pipeline, publish, review
 
 
 def get_ctx(args):
@@ -172,6 +172,16 @@ def cmd_analyze(args):
     return 0
 
 
+def cmd_brand(args):
+    cfg, _ = get_ctx(args)
+    for ch in channels_for(cfg, args):
+        paths = brand.write_all(cfg, ch)
+        print(f"{ch.name}:")
+        for kind, p in paths.items():
+            print(f"   {kind}: {p}")
+    return 0
+
+
 def cmd_diagnose(args):
     cfg, led = get_ctx(args)
     for ch in channels_for(cfg, args):
@@ -240,6 +250,8 @@ def main(argv=None):
     sp = sub.add_parser("analyze"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_analyze)
 
     sp = sub.add_parser("diagnose"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_diagnose)
+
+    sp = sub.add_parser("brand"); sp.add_argument("--channel"); sp.set_defaults(fn=cmd_brand)
 
     sp = sub.add_parser("run"); sp.add_argument("--dry-run", action="store_true"); sp.set_defaults(fn=cmd_run)
 

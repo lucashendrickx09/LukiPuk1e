@@ -45,8 +45,13 @@ python run.py review          # watch them
 ## Phase 2 — YouTube plumbing (~45 min once, then a wait you don't control)
 
 Channel setup (both channels, one Google account is fine):
-- [ ] youtube.com → profile → "Create a channel" (brand account) → set name/handle/avatar
-- [ ] Repeat for channel B
+- [ ] `python run.py brand` — generates avatar/banner/watermark + paste-ready copy
+      into `data/brand/<channel>/` (identities are defined in BRAND.md)
+- [ ] youtube.com → profile → "Create a channel" (brand account) →
+      name **Broke to Billions**, handle `@BrokeToBillions` (alternates in BRAND.md
+      if taken) → Studio → Customization: upload `avatar.png` + `banner.png` +
+      `watermark.png`, paste the description from `ABOUT.txt`
+- [ ] Repeat for channel B (**Brain Glitch**, `@TheBrainGlitch`)
 
 Per channel, its own Google Cloud project (doubles quota, isolates audits):
 - [ ] console.cloud.google.com → New project (e.g. `shorts-channel-a`)
