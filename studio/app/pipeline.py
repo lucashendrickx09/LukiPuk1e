@@ -131,6 +131,49 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
     return video_id
 
 
+def revoice_video(cfg, channel, ledger, video_id: int, engine=None) -> tuple[str, float]:
+    """Re-synthesize voice and re-render an existing video from its stored script.
+
+    Why this exists: scripts can be produced anywhere (e.g. a remote session with
+    only the mock voice available); the mechanical voice+render pass then reruns
+    on a machine with Kokoro in one command. Also handy after changing voices or
+    themes. Status is preserved (rendered stays rendered, approved stays approved).
+    """
+    row = ledger.video(video_id)
+    if row is None:
+        raise KeyError(f"no video {video_id}")
+    if row["status"] == "published":
+        raise ValueError(f"video {video_id} is already published")
+    script = scriptgen.Script.from_dict(json.loads(row["script"]))
+
+    workdir = cfg.data_dir / "build" / f"{channel.name}_{video_id}_{_slug(script.title)}"
+    workdir.mkdir(parents=True, exist_ok=True)
+    engine = engine or voice_mod.pick_engine(cfg.tts_engine)
+    wav = workdir / "voice.wav"
+    words, _ = engine.synth(script.spoken_text(), channel.voice, wav)
+    wav, words = voice_mod.apply_rate(wav, words, channel.voice_rate)
+
+    out_mp4 = cfg.data_dir / "renders" / f"{channel.name}_{video_id}_{_slug(script.title)}.mp4"
+    out_mp4.parent.mkdir(parents=True, exist_ok=True)
+    seed = video_id * 7919 + 17
+    path, duration = _render_final(cfg, channel, script, wav, words, out_mp4,
+                                   workdir, seed, log=ledger.log)
+    ledger.set_video(video_id, video_path=str(path), duration=duration)
+    ledger.log("revoiced", f"video {video_id} ({duration:.1f}s, engine={getattr(engine, 'name', '?')})")
+    return str(path), duration
+
+
+def revoice_all(cfg, channel, ledger, engine=None) -> list[int]:
+    """Re-voice+render every unpublished produced video on a channel."""
+    done = []
+    engine = engine or voice_mod.pick_engine(cfg.tts_engine)
+    for status in ("rendered", "approved"):
+        for row in ledger.videos(channel.name, status=status):
+            revoice_video(cfg, channel, ledger, row["id"], engine=engine)
+            done.append(row["id"])
+    return done
+
+
 def run_channel(cfg, channel, ledger, count: int | None = None, client=None, engine=None,
                 use_web_search: bool = True) -> list[int]:
     """Produce up to `count` (default videos_per_day) new videos for one channel."""

@@ -121,6 +121,18 @@ def cmd_produce(args):
     return 0
 
 
+def cmd_revoice(args):
+    cfg, led = get_ctx(args)
+    for ch in channels_for(cfg, args):
+        if args.video:
+            path, dur = pipeline.revoice_video(cfg, ch, led, args.video)
+            print(f"{ch.name}: video {args.video} re-rendered ({dur:.1f}s) -> {path}")
+            break
+        done = pipeline.revoice_all(cfg, ch, led)
+        print(f"{ch.name}: re-voiced {len(done)} video(s): {done}")
+    return 0
+
+
 def cmd_review(args):
     cfg, led = get_ctx(args)
     if args.action == "list" or args.action is None:
@@ -244,6 +256,10 @@ def main(argv=None):
     sp = sub.add_parser("produce")
     sp.add_argument("--channel"); sp.add_argument("--count", type=int, default=None)
     sp.set_defaults(fn=cmd_produce)
+
+    sp = sub.add_parser("revoice")
+    sp.add_argument("--channel"); sp.add_argument("--video", type=int, default=None)
+    sp.set_defaults(fn=cmd_revoice)
 
     sp = sub.add_parser("review")
     sp.add_argument("action", nargs="?", choices=["list", "approve", "reject"], default="list")

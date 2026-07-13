@@ -70,6 +70,30 @@ def test_sample_video_renders(cfg, channel, ledger):
     assert path.exists() and path.stat().st_size > 10_000
 
 
+@pytest.mark.skipif(not HAVE_FFMPEG, reason="ffmpeg not installed")
+def test_revoice_rerenders_and_keeps_status(cfg, channel, ledger):
+    from tests.conftest import GOOD_SCRIPT
+    idea = ledger.add_idea(channel.name, "revoice topic")
+    vid = ledger.add_video(idea, channel.name, GOOD_SCRIPT, hook_type="stat_shock",
+                           fmt="explainer", est_seconds=26, score=0.8)
+    ledger.set_video(vid, status="approved", video_path="/stale/old.mp4", duration=0)
+    path, dur = pipeline.revoice_video(cfg, channel, ledger, vid, engine=MockEngine())
+    row = ledger.video(vid)
+    assert row["status"] == "approved"          # status preserved
+    assert row["video_path"] == path and "/stale/" not in path
+    assert dur > 15
+
+
+def test_revoice_refuses_published(cfg, channel, ledger):
+    from tests.conftest import GOOD_SCRIPT
+    idea = ledger.add_idea(channel.name, "published topic")
+    vid = ledger.add_video(idea, channel.name, GOOD_SCRIPT, hook_type="stat_shock",
+                           fmt="explainer", est_seconds=26, score=0.8)
+    ledger.set_video(vid, status="published")
+    with pytest.raises(ValueError):
+        pipeline.revoice_video(cfg, channel, ledger, vid, engine=MockEngine())
+
+
 def test_autopilot_approves_above_threshold(cfg, channel, ledger, tmp_path, monkeypatch):
     # two rendered videos: one above the autopilot floor, one below
     vids = []
