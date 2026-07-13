@@ -81,12 +81,20 @@ class KokoroEngine:
 
 
 class EdgeEngine:
-    """edge-tts fallback (network). Voices like en-US-ChristopherNeural."""
+    """edge-tts fallback (network). Voices like en-US-ChristopherNeural.
+    Kokoro-style voice names (af_*/am_*/bf_*/bm_*) are mapped to Edge equivalents
+    so a channel config written for Kokoro still works on the fallback."""
     name = "edge"
+
+    KOKORO_MAP = {"af": "en-US-AriaNeural", "am": "en-US-ChristopherNeural",
+                  "bf": "en-GB-SoniaNeural", "bm": "en-GB-RyanNeural"}
 
     def synth(self, text: str, voice: str, out_wav: Path) -> tuple[list[Word], float]:
         import asyncio
         import edge_tts  # noqa
+
+        if voice and "Neural" not in voice:
+            voice = self.KOKORO_MAP.get(voice.split("_")[0], "en-US-ChristopherNeural")
 
         async def run():
             communicate = edge_tts.Communicate(text, voice or "en-US-ChristopherNeural")

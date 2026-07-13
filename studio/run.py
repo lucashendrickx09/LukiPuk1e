@@ -123,12 +123,16 @@ def cmd_produce(args):
 
 def cmd_revoice(args):
     cfg, led = get_ctx(args)
+    engine = None
+    if args.engine:
+        from app import voice as voice_mod
+        engine = voice_mod.pick_engine(args.engine)
     for ch in channels_for(cfg, args):
         if args.video:
-            path, dur = pipeline.revoice_video(cfg, ch, led, args.video)
+            path, dur = pipeline.revoice_video(cfg, ch, led, args.video, engine=engine)
             print(f"{ch.name}: video {args.video} re-rendered ({dur:.1f}s) -> {path}")
             break
-        done = pipeline.revoice_all(cfg, ch, led)
+        done = pipeline.revoice_all(cfg, ch, led, engine=engine)
         print(f"{ch.name}: re-voiced {len(done)} video(s): {done}")
     return 0
 
@@ -259,6 +263,7 @@ def main(argv=None):
 
     sp = sub.add_parser("revoice")
     sp.add_argument("--channel"); sp.add_argument("--video", type=int, default=None)
+    sp.add_argument("--engine", choices=["kokoro", "edge", "mock"], default=None)
     sp.set_defaults(fn=cmd_revoice)
 
     sp = sub.add_parser("review")

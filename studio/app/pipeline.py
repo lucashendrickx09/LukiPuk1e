@@ -60,6 +60,9 @@ def _aligned_scenes(script) -> list[dict]:
     out = [dict(empty, **s) for s in (script.scenes or [])[:need] if isinstance(s, dict)]
     while len(out) < need:
         out.append(dict(empty))
+    # the hook card owns the top of the screen while scene 1 plays — any scene
+    # kind that puts content up there would collide, so the opener is always ambient
+    out[0]["kind"] = "ambient"
     return out
 
 

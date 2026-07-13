@@ -50,7 +50,7 @@ SCRIPT_SCHEMA = {
         "pin_comment": {"type": "string",
                         "description": "A question (<=120 chars) the channel posts as its own first comment to spark replies. Must invite a specific, easy-to-give answer."},
         "scenes": {"type": "array", "items": SCENE_SCHEMA,
-                   "description": "Storyboard: exactly one scene per segment, in order: hook, each beat, payoff. Scene 1 (hook) should be 'ambient' or 'big_stat' — the hook text is already on screen."},
+                   "description": "Storyboard: exactly one scene per segment, in order: hook, each beat, payoff. Scene 1 (hook) must be 'ambient' (plus an emoji) — the hook text is already on screen as a card."},
     },
     "required": ["hook", "beats", "payoff", "loop_line", "title", "description", "tags", "hook_type", "format", "pin_comment", "scenes"],
     "additionalProperties": False,
