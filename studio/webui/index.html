@@ -12,22 +12,28 @@
     --warn:#FFC53D; --bad:#FF6369;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:22px 20px 80px}
-  a{color:var(--accent)}
+  body{background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px 20px 90px}
+  a{color:var(--accent);text-decoration:none}
   .wrap{max-width:1200px;margin:0 auto}
-  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
-  header h1{font-size:22px;letter-spacing:.4px}
+  header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  header h1{font-size:20px;letter-spacing:.4px;margin-right:8px}
   header h1 b{color:var(--accent)}
   header .sp{flex:1}
+  nav{display:flex;gap:6px;margin:10px 0 20px;border-bottom:1px solid var(--line);padding-bottom:0}
+  nav a{padding:10px 18px;color:var(--ink2);font-weight:600;font-size:14px;border-bottom:2px solid transparent}
+  nav a.on{color:var(--accent);border-bottom-color:var(--accent)}
   button{background:var(--card2);color:var(--ink);border:1px solid var(--line);border-radius:9px;
-    padding:9px 16px;font:600 13px system-ui;cursor:pointer}
+    padding:8px 15px;font:600 13px system-ui;cursor:pointer}
   button:hover{border-color:var(--accent-dim)}
   button.primary{background:var(--accent);color:#06130B;border-color:var(--accent)}
+  button.danger{border-color:#4a2226;color:var(--bad)}
+  button.sm{padding:5px 11px;font-size:12px}
   button:disabled{opacity:.45;cursor:wait}
   .grid{display:grid;gap:16px}
   .cols2{grid-template-columns:repeat(auto-fit,minmax(430px,1fr))}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
-  .card h2{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink2);margin-bottom:14px}
+  .card h2{font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink2);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+  .card h2 .sp{flex:1}
   h3.chan{font-size:19px;margin-bottom:2px}
   h3.chan span{color:var(--muted);font-size:13px;font-weight:400;margin-left:8px}
   .tag{color:var(--ink2);font-size:13px;margin-bottom:14px}
@@ -51,7 +57,8 @@
      letter-spacing:.6px;padding:6px 8px;border-bottom:1px solid var(--line)}
   td{padding:7px 8px;border-bottom:1px solid var(--line);color:var(--ink2)}
   td.n{color:var(--ink);font-variant-numeric:tabular-nums}
-  .flow{display:flex;flex-direction:column;gap:0}
+  tr.best td{color:var(--accent)}
+  .flow{display:flex;flex-direction:column}
   .fstep{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:11px 6px 11px 20px;
     border-left:2px solid var(--accent-dim);margin-left:14px;position:relative}
   .fstep:last-child{border-left-color:transparent}
@@ -61,10 +68,11 @@
   .fname small{display:block;color:var(--muted);font-weight:400;font-size:11px;font-family:ui-monospace,monospace}
   .fwhat{color:var(--ink2);font-size:13px}
   .frule{color:var(--accent);font-size:12px;margin-top:2px}
-  .pill{display:inline-block;border:1px solid var(--accent-dim);border-radius:20px;color:var(--accent);
-    padding:2px 10px;font-size:11px;letter-spacing:.6px;margin:2px 4px 2px 0}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:20px;color:var(--ink2);
+    padding:2px 10px;font-size:11px;letter-spacing:.4px;margin:2px 4px 2px 0}
+  .pill.acc{border-color:var(--accent-dim);color:var(--accent)}
   .insight{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:16px;
-    margin-top:10px;max-height:480px;overflow:auto;font-size:14px}
+    margin-top:10px;max-height:520px;overflow:auto;font-size:14px}
   .insight h1{font-size:17px;margin:8px 0}
   .insight h2{font-size:14px;color:var(--accent);text-transform:none;letter-spacing:0;margin:14px 0 6px}
   .insight li{margin-left:18px;color:var(--ink2)}
@@ -78,12 +86,40 @@
   .mile:last-child{border-bottom:none}
   .mile b{color:var(--accent);width:120px;flex:none}
   .mile span{color:var(--ink2)}
-  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--card2);
-    border:1px solid var(--accent-dim);border-radius:10px;padding:10px 18px;font-size:13px;display:none}
+  .guid{border-left:3px solid var(--line);background:var(--card2);border-radius:8px;
+    padding:10px 14px;margin-bottom:10px;font-size:13px}
+  .guid.act{border-left-color:var(--accent)} .guid.fix{border-left-color:var(--bad)}
+  .guid.good{border-left-color:var(--accent-dim)} .guid.info{border-left-color:var(--line)}
+  .guid b{display:block;font-size:14px}
+  .guid .ev{color:var(--muted);font-family:ui-monospace,monospace;font-size:12px;margin:3px 0}
+  .guid .ac{color:var(--accent);font-size:12.5px}
+  .vidcard{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .vidcard .ttl{font-weight:700;font-size:14px}
+  .vidcard .meta{color:var(--muted);font-size:12px;margin:2px 0 6px}
+  .vidcard details{margin-top:6px}
+  .vidcard summary{cursor:pointer;color:var(--accent);font-size:12.5px}
+  .script{font-size:13px;color:var(--ink2);margin-top:8px}
+  .script .hk{color:var(--ink);font-weight:600}
+  .script .lb{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-top:8px}
+  video.preview{width:100%;max-width:270px;border-radius:10px;border:1px solid var(--line);display:block;margin:8px 0}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .status{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;letter-spacing:.5px}
+  .status.rendered{background:#1a2b22;color:var(--accent)}
+  .status.approved{background:#132a1c;color:var(--accent)}
+  .status.published{background:#12241a;color:var(--ink2)}
+  .status.scripted{background:#20242b;color:#9db2d0}
+  .status.rejected{background:#2b1416;color:var(--bad)}
+  #jobsbar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);
+    padding:8px 20px;font-size:13px;display:none;z-index:20}
+  #jobsbar .jb{margin-right:18px}
+  #toast{position:fixed;bottom:52px;left:50%;transform:translateX(-50%);background:var(--card2);
+    border:1px solid var(--accent-dim);border-radius:10px;padding:10px 18px;font-size:13px;display:none;z-index:30}
   .tip{position:fixed;pointer-events:none;background:var(--card2);border:1px solid var(--line);
     border-radius:8px;padding:5px 9px;font-size:12px;display:none;z-index:10}
-  .empty{color:var(--muted);font-size:13px;padding:14px 0}
+  .empty{color:var(--muted);font-size:13px;padding:12px 0}
   .section{margin-top:18px}
+  .page{display:none}.page.on{display:block}
+  .rlist{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 </style>
 </head>
 <body data-palette="#35E87A">
@@ -91,75 +127,116 @@
   <header>
     <h1>⬤ MISSION CONTROL <b>// SHORTS STUDIO</b></h1>
     <div class="sp"></div>
-    <button id="refreshBtn" onclick="doRefresh()">↻ Pull latest analytics</button>
-    <button id="diagBtn" class="primary" onclick="doDiagnose()">✦ Run Claude deep analysis</button>
+    <button onclick="doRefresh(this)">↻ Pull latest analytics</button>
   </header>
+  <nav>
+    <a href="#dashboard" data-page="dashboard">Dashboard</a>
+    <a href="#analytics" data-page="analytics">Analytics</a>
+    <a href="#method" data-page="method">Method&nbsp;·&nbsp;Studio</a>
+  </nav>
 
-  <div class="grid cols2" id="channels"></div>
-
-  <div class="grid cols2 section">
-    <div class="card">
-      <h2>AI insights — what to fix, what to double down on</h2>
-      <div id="insightMeta" class="sub"></div>
-      <div class="insight" id="insightBody"><div class="empty">No analysis yet — press “Run Claude deep analysis”. Reports save to data/reports/ and the formula keeps learning from every video regardless.</div></div>
-    </div>
-    <div>
+  <div class="page" id="page-dashboard">
+    <div class="grid cols2" id="channels"></div>
+    <div class="grid cols2 section">
       <div class="card">
-        <h2>What the formula has learned (live priors)</h2>
-        <div id="priors"></div>
+        <h2>Latest AI insight <span class="sp"></span><a href="#analytics">full analytics →</a></h2>
+        <div id="insightMeta" class="sub"></div>
+        <div class="insight" id="insightBody"></div>
       </div>
-      <div class="card section">
-        <h2>Road to 100,000</h2>
-        <div id="miles"></div>
+      <div>
+        <div class="card"><h2>Toolchain</h2><div id="tools"></div></div>
+        <div class="card section"><h2>Road to 100,000</h2><div id="miles"></div></div>
       </div>
     </div>
   </div>
 
-  <div class="grid cols2 section">
-    <div class="card">
-      <h2>The method — the pipeline every video follows</h2>
-      <div class="flow" id="method"></div>
+  <div class="page" id="page-analytics">
+    <div class="row" style="margin-bottom:14px">
+      <button class="primary" onclick="doDiagnose(this)">✦ Run Claude deep analysis</button>
+      <span class="sub">Evidence first: every recommendation below cites the numbers that produced it.</span>
     </div>
-    <div>
+    <div id="anBody"><div class="empty">loading…</div></div>
+    <div class="card section">
+      <h2>Claude report history</h2>
+      <div class="rlist" id="reportList"></div>
+      <div class="insight" id="reportBody"><div class="empty">Pick a report above, or run a new deep analysis.</div></div>
+    </div>
+  </div>
+
+  <div class="page" id="page-method">
+    <div class="grid cols2">
       <div class="card">
-        <h2>Toolchain</h2>
-        <div id="tools"></div>
+        <h2>The method — every video walks this path</h2>
+        <div class="flow" id="method"></div>
       </div>
-      <div class="card section">
-        <h2>Recent videos</h2>
-        <div id="videos"></div>
+      <div class="card">
+        <h2>1 · Ideas — research & scores</h2>
+        <div id="ideas"></div>
+      </div>
+    </div>
+    <div class="grid cols2 section">
+      <div class="card">
+        <h2>2 · Production — scripts & renders</h2>
+        <div id="production"></div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>3 · Review — watch, approve, reject</h2>
+          <div id="reviewq"></div>
+        </div>
+        <div class="card section">
+          <h2>4 · Publish — schedule & upcoming</h2>
+          <div id="publishq"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
+<div id="jobsbar"></div>
 <div id="toast"></div>
 <div class="tip" id="tip"></div>
 
 <script>
 const $=q=>document.querySelector(q);
 const fmt=n=>n==null?"—":(n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(1)+"K":n.toLocaleString());
-let DATA=null;
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+let SUMMARY=null, AN=null, PIPE=null, jobTimer=null;
+const IS_PREVIEW = typeof PREVIEW !== "undefined";
 
-function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",5000)}
+function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";setTimeout(()=>t.style.display="none",5200)}
+async function api(path,opts){const r=await fetch(path,opts);return r.json()}
+async function act(path,body){
+  if(IS_PREVIEW){toast("Preview mode — run `python run.py web` on your machine for live controls");return null}
+  return api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})})
+}
 
+/* ---------- router ---------- */
+function route(){
+  const page=(location.hash||"#dashboard").slice(1);
+  document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="page-"+page));
+  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.page===page));
+  if(page==="dashboard")loadSummary();
+  if(page==="analytics")loadAnalytics();
+  if(page==="method")loadPipeline();
+}
+window.addEventListener("hashchange",route);
+
+/* ---------- dashboard ---------- */
 function statusChip(v,goodAt,warnAt,suffix){
   if(v==null)return `<span class="s" style="color:var(--muted)">— no data yet</span>`;
   if(v>=goodAt)return `<span class="s ok">✓ above ${goodAt}${suffix}</span>`;
   if(v>=warnAt)return `<span class="s warnc">▲ near gate (${goodAt}${suffix})</span>`;
   return `<span class="s badc">✕ below ${goodAt}${suffix} gate</span>`;
 }
-
 function channelCard(c,bm){
-  const subs=c.subscribers, g=c.goal;
-  const mark=c.mark==="glitch"?"◐":"↗";
+  const g=c.goal, mark=c.mark==="glitch"?"◐":"↗";
   return `<div class="card">
-    <h3 class="chan">${mark} ${c.display}<span>${c.handle} · ${c.niche}</span></h3>
-    <div class="tag">${c.tagline}</div>
-    <div class="hero"><span class="n">${c.stats_known?fmt(subs):"—"}</span>
+    <h3 class="chan">${mark} ${esc(c.display)}<span>${esc(c.handle)} · ${esc(c.niche)}</span></h3>
+    <div class="tag">${esc(c.tagline)}</div>
+    <div class="hero"><span class="n">${c.stats_known?fmt(c.subscribers):"—"}</span>
       <span class="u">subscribers · goal ${fmt(g.subscribers)}</span></div>
     <div class="bar"><i style="width:${Math.max(g.pct_to_goal,0.5)}%"></i></div>
-    <div class="sub">${g.pct_to_goal}% of the way to 100K ${c.stats_known?"":"· connect YouTube auth + press refresh for live numbers"}</div>
-
+    <div class="sub">${g.pct_to_goal}% of the way to 100K${c.stats_known?"":" · connect YouTube auth + refresh for live numbers"}</div>
     <div class="tiles">
       <div class="tile"><div class="v">${fmt(c.views_90d)}</div><div class="k">views · 90d</div>
         <div class="s sub">${g.tier2_views_pct}% of 10M monetize req.</div></div>
@@ -171,40 +248,194 @@ function channelCard(c,bm){
       <div class="tile"><div class="v">${c.published}</div><div class="k">published</div>
         <div class="s sub">${(c.videos_by_status.rendered||0)} awaiting review</div></div>
     </div>
-
-    <div class="chartlbl"><span>Retention per video (newest right) — dashed line = ${bm.retention_gate_short_pct}% gate</span></div>
+    <div class="chartlbl"><span>Retention per video (newest right) — dashed = ${bm.retention_gate_short_pct}% gate</span></div>
     <canvas class="spark" data-series='${JSON.stringify(c.retention_series)}' data-bench="${bm.retention_gate_short_pct}" data-max="100" data-suffix="%"></canvas>
     <div class="chartlbl"><span>Views per video</span></div>
     <canvas class="spark" data-series='${JSON.stringify(c.views_series)}' data-suffix=" views"></canvas>
-
-    <div class="sub" style="margin-top:12px">Monetization: tier 1 (500 subs) ${g.tier1_pct}% · tier 2 subs ${g.tier2_subs_pct}% · tier 2 views ${g.tier2_views_pct}%</div>
-    <div class="bar warns" title="tier 2 views"><i style="width:${Math.max(g.tier2_views_pct,0.5)}%"></i></div>
+    <div class="sub" style="margin-top:12px">Monetization: tier 1 ${g.tier1_pct}% · tier 2 subs ${g.tier2_subs_pct}% · tier 2 views ${g.tier2_views_pct}%</div>
+    <div class="bar warns"><i style="width:${Math.max(g.tier2_views_pct,0.5)}%"></i></div>
   </div>`;
 }
+async function loadSummary(){
+  SUMMARY = typeof PREVIEW!=="undefined" ? PREVIEW.summary : await api("/api/summary");
+  const d=SUMMARY;
+  $("#channels").innerHTML=d.channels.map(c=>channelCard(c,d.benchmarks)).join("");
+  $("#miles").innerHTML=d.milestones.map(m=>`<div class="mile"><b>${m.at}</b><span>${m.focus}</span></div>`).join("");
+  $("#tools").innerHTML=d.tools.map(t=>`<div class="toolrow">
+     <span class="st ${t.ok?"ok":"badc"}">${t.ok?"✓ ready":"✕ missing"}</span>
+     <span class="nm">${esc(t.name)}</span><span class="rl">${esc(t.role)}</span></div>`).join("");
+  $("#insightMeta").textContent=d.insights.latest_name?`Latest: ${d.insights.latest_name} · ${d.insights.count} saved`:"";
+  $("#insightBody").innerHTML=d.insights.latest_markdown?mdRender(d.insights.latest_markdown)
+    :`<div class="empty">No analysis yet — run one from the Analytics page.</div>`;
+  drawSparks();
+}
 
+/* ---------- analytics ---------- */
+function grpTable(rows,label){
+  if(!rows.length)return `<div class="empty">no published data</div>`;
+  return `<table><tr><th>${label}</th><th>n</th><th>views</th><th>ret%</th><th>perf</th></tr>${
+    rows.map((r,i)=>`<tr class="${i===0&&rows.length>1?"best":""}"><td>${esc(r.group)}</td><td class="n">${r.videos}</td>
+    <td class="n">${fmt(r.views)}</td><td class="n">${r.avg_retention_pct??"—"}</td>
+    <td class="n">${r.avg_performance}</td></tr>`).join("")}</table>`;
+}
+async function loadAnalytics(){
+  AN = typeof PREVIEW!=="undefined" ? PREVIEW.analytics : await api("/api/analytics");
+  $("#anBody").innerHTML=AN.channels.map(c=>`
+    <div class="card section">
+      <h2>${esc(c.display)} — evidence & guidance</h2>
+      <div class="grid cols2">
+        <div>
+          ${c.guidance.map(g=>`<div class="guid ${g.level}"><b>${esc(g.finding)}</b>
+            <div class="ev">evidence: ${esc(g.evidence)}</div>
+            <div class="ac">→ ${esc(g.action)}</div></div>`).join("")||'<div class="empty">no findings yet</div>'}
+          <div class="sub" style="margin-top:10px">Idea funnel: ${c.funnel.candidates} candidates ·
+            ${c.funnel.scripted_total} passed the gate · ${c.funnel.discarded} discarded</div>
+        </div>
+        <div>
+          <div class="sub" style="margin-bottom:4px">BY HOOK TYPE</div>${grpTable(c.by_hook,"hook")}
+          <div class="sub" style="margin:12px 0 4px">BY FORMAT</div>${grpTable(c.by_format,"format")}
+          <div class="sub" style="margin:12px 0 4px">BY LENGTH</div>${grpTable(c.by_length,"length")}
+          <div class="sub" style="margin:12px 0 4px">BY POSTING SLOT (channel-local)</div>
+          ${c.slots.length?`<table><tr><th>slot</th><th>n</th><th>avg views</th><th>ret%</th></tr>${
+            c.slots.map(s=>`<tr><td>${s.slot}</td><td class="n">${s.videos}</td>
+            <td class="n">${fmt(s.avg_views)}</td><td class="n">${s.avg_retention_pct??"—"}</td></tr>`).join("")}</table>`
+            :'<div class="empty">no slot data yet</div>'}
+          <div class="sub" style="margin:12px 0 4px">LEARNED PRIORS (the formula's memory)</div>
+          ${c.priors.length?`<table><tr><th>pattern</th><th>score</th><th>n</th></tr>${
+            c.priors.sort((a,b)=>b.value-a.value).slice(0,10).map(p=>`<tr><td>${esc(p.key)}</td>
+            <td class="n">${p.value}</td><td class="n">${p.samples}</td></tr>`).join("")}</table>`
+            :'<div class="empty">appears after videos clear 25+ views</div>'}
+        </div>
+      </div>
+    </div>`).join("");
+  $("#reportList").innerHTML=AN.reports.map(r=>`<button class="sm" onclick="openReport('${r}')">${r}</button>`).join("")
+    ||'<span class="empty">none saved yet</span>';
+}
+async function openReport(name){
+  if(typeof PREVIEW!=="undefined"){$("#reportBody").innerHTML=mdRender(PREVIEW.report);return}
+  const r=await api("/api/report?name="+encodeURIComponent(name));
+  $("#reportBody").innerHTML=r.markdown?mdRender(r.markdown):`<div class="empty">${esc(r.error||"not found")}</div>`;
+}
+
+/* ---------- method / studio ---------- */
+function chanBtns(kind,extra){
+  return PIPE.channels.map(c=>`<button class="sm" onclick="${kind}('${c.id}')">${extra} ${esc(c.display)}</button>`).join(" ");
+}
+function scriptDetail(v){
+  return `<details><summary>script & storyboard</summary><div class="script">
+    <div class="lb">hook</div><div class="hk">${esc(v.hook)}</div>
+    <div class="lb">beats</div>${v.beats.map((b,i)=>`<div>${i+1}. ${esc(b)}</div>`).join("")}
+    <div class="lb">payoff</div><div>${esc(v.payoff)}</div>
+    <div class="lb">loop</div><div>${esc(v.loop_line)}</div>
+    <div class="lb">pinned comment</div><div>${esc(v.pin_comment)}</div>
+    <div class="lb">scenes</div><div>${v.scenes.map(s=>`<span class="pill">${esc(s.kind)} ${esc(s.emoji)}</span>`).join("")}</div>
+  </div></details>`;
+}
+async function loadPipeline(){
+  PIPE = typeof PREVIEW!=="undefined" ? PREVIEW.pipeline : await api("/api/pipeline");
+  $("#method").innerHTML=PIPE.method.map(s=>`<div class="fstep"><div class="fdot">•</div>
+     <div class="fname">${s.step}<small>${s.module}</small></div>
+     <div><div class="fwhat">${s.what}</div><div class="frule">▸ ${s.rule}</div></div></div>`).join("");
+  $("#ideas").innerHTML=`<div class="row" style="margin-bottom:10px">${chanBtns("runResearch","🔎 Research")}</div>`+
+    PIPE.channels.map(c=>{
+      const rows=c.ideas.slice(0,8);
+      return `<div class="sub" style="margin-top:8px">${esc(c.display)} — ${c.ideas.length} candidate idea(s)</div>`+
+        (rows.length?`<table><tr><th>topic</th><th>trend</th><th>novel</th><th>S1</th></tr>${
+          rows.map(i=>`<tr><td>${esc(i.topic)}</td><td class="n">${(+i.trend).toFixed(2)}</td>
+          <td class="n">${(+i.novelty).toFixed(2)}</td><td class="n">${(+i.score).toFixed(2)}</td></tr>`).join("")}</table>`
+        :'<div class="empty">none — run research</div>');
+    }).join("");
+  $("#production").innerHTML=`<div class="row" style="margin-bottom:10px">${chanBtns("runProduce","🎬 Produce 1 for")}</div>`+
+    PIPE.channels.map(c=>{
+      const vids=c.videos.filter(v=>v.status!=="rejected").slice(0,8);
+      return `<div class="sub" style="margin-top:8px">${esc(c.display)}</div>`+
+        (vids.length?vids.map(v=>`<div class="vidcard">
+          <div class="row"><span class="status ${v.status}">${v.status}</span>
+            <span class="ttl">${esc(v.title)}</span></div>
+          <div class="meta">S2 ${v.score} · ${v.duration}s · ${esc(v.hook_type)} / ${esc(v.format)}</div>
+          ${scriptDetail(v)}</div>`).join("")
+        :'<div class="empty">nothing produced yet</div>');
+    }).join("");
+  const q=PIPE.channels.flatMap(c=>c.videos.filter(v=>v.status==="rendered").map(v=>({ch:c.display,...v})));
+  $("#reviewq").innerHTML=q.length?q.map(v=>`<div class="vidcard">
+      <div class="row"><span class="status rendered">rendered</span><span class="ttl">${esc(v.title)}</span></div>
+      <div class="meta">${esc(v.ch)} · S2 ${v.score} · ${v.duration}s</div>
+      ${v.has_file?`<video class="preview" controls preload="metadata" src="/video/${v.id}"></video>`:""}
+      ${scriptDetail(v)}
+      <div class="row" style="margin-top:8px">
+        <button class="sm primary" onclick="doApprove(${v.id})">✓ Approve</button>
+        <button class="sm danger" onclick="doReject(${v.id})">✕ Reject</button>
+      </div></div>`).join("")
+    :'<div class="empty">Review queue is empty — produce something.</div>';
+  const approved=PIPE.channels.flatMap(c=>c.videos.filter(v=>v.status==="approved").map(v=>({ch:c.display,...v})));
+  const upcoming=PIPE.channels.flatMap(c=>c.posts.filter(p=>["scheduled","uploaded","exported"].includes(p.status)));
+  $("#publishq").innerHTML=
+    `<div class="row" style="margin-bottom:10px">${chanBtns("runPublish","🚀 Publish approved for")}</div>`+
+    (approved.length?`<div class="sub">${approved.length} approved & waiting</div>`:"")+
+    (upcoming.length?`<table><tr><th>title</th><th>goes live (UTC)</th><th>status</th></tr>${
+      upcoming.slice(0,8).map(p=>`<tr><td>${esc(p.title)}</td><td class="n">${p.publish_at}</td>
+      <td>${p.status}</td></tr>`).join("")}</table>`
+    :'<div class="empty">nothing scheduled yet</div>');
+}
+async function runResearch(ch){const r=await act("/api/action/research",{channel:ch});if(r)watchJobs()}
+async function runProduce(ch){const r=await act("/api/action/produce",{channel:ch,count:1});if(r){toast("Producing — script, voice, scenes, render. Watch the jobs bar.");watchJobs()}}
+async function runPublish(ch){const r=await act("/api/action/publish",{channel:ch});if(r)watchJobs()}
+async function doApprove(id){const r=await act("/api/action/approve",{video_id:id});if(r){toast("Approved");loadPipeline()}}
+async function doReject(id){
+  if(IS_PREVIEW){toast("Preview mode — run `python run.py web` on your machine for live controls");return}
+  const reason=prompt("Why? (teaches the gate)")||"";
+  await act("/api/action/reject",{video_id:id,reason});toast("Rejected");loadPipeline();
+}
+async function doRefresh(b){
+  if(IS_PREVIEW){toast("Preview mode — run `python run.py web` on your machine for live controls");return}
+  b.disabled=true;
+  try{const r=await api("/api/refresh",{method:"POST"});
+    const errs=Object.entries(r).filter(([k,v])=>v.error);
+    toast(errs.length?`Refreshed with issues: ${errs.map(([k,v])=>k+": "+v.error).join(" · ").slice(0,150)}`:"Analytics refreshed");
+    route();
+  }finally{b.disabled=false}
+}
+async function doDiagnose(b){
+  const r=await act("/api/diagnose");
+  if(r){toast("Claude is analyzing — watch the jobs bar");watchJobs()}
+}
+
+/* ---------- jobs ---------- */
+async function watchJobs(){
+  if(IS_PREVIEW)return;
+  clearInterval(jobTimer);
+  jobTimer=setInterval(async()=>{
+    const jobs=await api("/api/jobs");
+    const running=jobs.filter(j=>j.status==="running");
+    const bar=$("#jobsbar");
+    if(jobs.length){bar.style.display="block";
+      bar.innerHTML=jobs.slice(0,4).map(j=>`<span class="jb">${j.status==="running"?"⏳":j.status==="done"?"✓":"✕"}
+        <b>${j.kind}</b> ${esc(j.detail)} ${j.result?"— "+esc(j.result):""}</span>`).join("");}
+    if(!running.length){clearInterval(jobTimer);route();setTimeout(()=>bar.style.display="none",8000)}
+  },2000);
+}
+
+/* ---------- shared ---------- */
 function drawSparks(){
   document.querySelectorAll("canvas.spark").forEach(cv=>{
     const series=JSON.parse(cv.dataset.series||"[]");
     const dpr=window.devicePixelRatio||1;
-    const W=cv.clientWidth*dpr, H=cv.clientHeight*dpr;
-    cv.width=W;cv.height=H;
-    const ctx=cv.getContext("2d");
-    ctx.clearRect(0,0,W,H);
+    const W=cv.clientWidth*dpr,H=cv.clientHeight*dpr;
+    if(!W)return; cv.width=W;cv.height=H;
+    const ctx=cv.getContext("2d");ctx.clearRect(0,0,W,H);
     if(series.length<2){ctx.fillStyle="#5C6B63";ctx.font=`${12*dpr}px system-ui`;
       ctx.fillText("waiting for published videos…",8*dpr,H/2);return}
-    const pad=6*dpr, max=cv.dataset.max?+cv.dataset.max:Math.max(...series)*1.15||1, min=0;
-    const X=i=>pad+(W-2*pad)*i/(series.length-1);
-    const Y=v=>H-pad-(H-2*pad)*(v-min)/(max-min);
-    if(cv.dataset.bench){const b=+cv.dataset.bench;ctx.strokeStyle="#5C6B63";ctx.setLineDash([4*dpr,4*dpr]);
-      ctx.lineWidth=dpr;ctx.beginPath();ctx.moveTo(pad,Y(b));ctx.lineTo(W-pad,Y(b));ctx.stroke();ctx.setLineDash([])}
+    const pad=6*dpr,max=cv.dataset.max?+cv.dataset.max:Math.max(...series)*1.15||1;
+    const X=i=>pad+(W-2*pad)*i/(series.length-1), Y=v=>H-pad-(H-2*pad)*v/max;
+    if(cv.dataset.bench){ctx.strokeStyle="#5C6B63";ctx.setLineDash([4*dpr,4*dpr]);ctx.lineWidth=dpr;
+      ctx.beginPath();ctx.moveTo(pad,Y(+cv.dataset.bench));ctx.lineTo(W-pad,Y(+cv.dataset.bench));ctx.stroke();ctx.setLineDash([])}
     ctx.strokeStyle="#35E87A";ctx.lineWidth=2*dpr;ctx.lineJoin="round";ctx.beginPath();
     series.forEach((v,i)=>i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(0),Y(v)));ctx.stroke();
     const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,"rgba(53,232,122,.18)");grad.addColorStop(1,"rgba(53,232,122,0)");
     ctx.lineTo(X(series.length-1),H-pad);ctx.lineTo(pad,H-pad);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-    const lx=X(series.length-1),ly=Y(series[series.length-1]);
-    ctx.fillStyle="#F2F5F3";ctx.beginPath();ctx.arc(lx,ly,4*dpr,0,7);ctx.fill();
+    ctx.fillStyle="#F2F5F3";ctx.beginPath();ctx.arc(X(series.length-1),Y(series[series.length-1]),4*dpr,0,7);ctx.fill();
     cv.onmousemove=e=>{const r=cv.getBoundingClientRect();
-      const i=Math.round((e.clientX-r.left)/(r.width)*(series.length-1));
+      const i=Math.round((e.clientX-r.left)/r.width*(series.length-1));
       if(i<0||i>=series.length)return;
       const tip=$("#tip");tip.style.display="block";
       tip.style.left=(e.clientX+12)+"px";tip.style.top=(e.clientY-30)+"px";
@@ -212,64 +443,18 @@ function drawSparks(){
     cv.onmouseleave=()=>$("#tip").style.display="none";
   });
 }
-
 function mdRender(md){
   return md.split("\n").map(l=>{
-    if(l.startsWith("### "))return `<h2>${l.slice(4)}</h2>`;
-    if(l.startsWith("## "))return `<h2>${l.slice(3)}</h2>`;
-    if(l.startsWith("# "))return `<h1>${l.slice(2)}</h1>`;
+    if(l.startsWith("### "))return `<h2>${inline(l.slice(4))}</h2>`;
+    if(l.startsWith("## "))return `<h2>${inline(l.slice(3))}</h2>`;
+    if(l.startsWith("# "))return `<h1>${inline(l.slice(2))}</h1>`;
     if(l.startsWith("- ")||l.startsWith("* "))return `<li>${inline(l.slice(2))}</li>`;
     if(!l.trim())return "";
     return `<p>${inline(l)}</p>`;
   }).join("");
-  function inline(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")
-    .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")}
+  function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")}
 }
-
-function render(){
-  const d=DATA;
-  $("#channels").innerHTML=d.channels.map(c=>channelCard(c,d.benchmarks)).join("");
-  $("#method").innerHTML=d.method.map(s=>`<div class="fstep"><div class="fdot">•</div>
-     <div class="fname">${s.step}<small>${s.module}</small></div>
-     <div><div class="fwhat">${s.what}</div><div class="frule">▸ ${s.rule}</div></div></div>`).join("");
-  $("#miles").innerHTML=d.milestones.map(m=>`<div class="mile"><b>${m.at}</b><span>${m.focus}</span></div>`).join("");
-  $("#tools").innerHTML=d.tools.map(t=>`<div class="toolrow">
-     <span class="st ${t.ok?"ok":"badc"}">${t.ok?"✓ ready":"✕ missing"}</span>
-     <span class="nm">${t.name}</span><span class="rl">${t.role}</span></div>`).join("");
-  const pri=d.channels.flatMap(c=>c.priors.map(p=>({ch:c.display,...p})));
-  $("#priors").innerHTML=pri.length?`<table><tr><th>channel</th><th>pattern</th><th>score</th><th>n</th></tr>${
-    pri.sort((a,b)=>b.value-a.value).slice(0,12).map(p=>`<tr><td>${p.ch}</td><td>${p.key}</td>
-    <td class="n">${p.value}</td><td class="n">${p.samples}</td></tr>`).join("")}</table>`
-    :`<div class="empty">Nothing learned yet — priors appear after videos clear 25+ views. Until then selection runs on trend, RPM and novelty.</div>`;
-  const vids=d.channels.flatMap(c=>c.videos.map(v=>({ch:c.display,...v})));
-  $("#videos").innerHTML=vids.length?`<table><tr><th>channel</th><th>hook</th><th>format</th><th>len</th><th>views</th><th>ret%</th><th>perf</th></tr>${
-    vids.slice(0,12).map(v=>`<tr><td>${v.ch}</td><td>${v.hook_type}</td><td>${v.format}</td>
-    <td class="n">${v.seconds}s</td><td class="n">${fmt(v.views)}</td><td class="n">${v.avg_view_pct??"—"}</td>
-    <td class="n">${v.performance}</td></tr>`).join("")}</table>`
-    :`<div class="empty">No published videos yet. The table fills as posts go live.</div>`;
-  if(d.insights.latest_markdown){
-    $("#insightMeta").textContent=`Latest: ${d.insights.latest_name} · ${d.insights.count} report(s) saved`;
-    $("#insightBody").innerHTML=mdRender(d.insights.latest_markdown);
-  }
-  drawSparks();
-}
-
-async function load(){DATA=await (await fetch("/api/summary")).json();render()}
-async function doRefresh(){
-  const b=$("#refreshBtn");b.disabled=true;b.textContent="↻ pulling…";
-  try{const r=await (await fetch("/api/refresh",{method:"POST"})).json();
-    const errs=Object.entries(r).filter(([k,v])=>v.error);
-    toast(errs.length?`Refreshed with issues: ${errs.map(([k,v])=>k+": "+v.error).join(" · ").slice(0,160)}`:"Analytics refreshed");
-    await load();
-  }finally{b.disabled=false;b.textContent="↻ Pull latest analytics"}}
-async function doDiagnose(){
-  const b=$("#diagBtn");b.disabled=true;b.textContent="✦ Claude is analyzing…";
-  try{const r=await (await fetch("/api/diagnose",{method:"POST"})).json();
-    const bad=Object.entries(r).filter(([k,v])=>!v.ok);
-    toast(bad.length?`Analysis issues: ${bad.map(([k,v])=>v.error).join("; ").slice(0,160)}`:"Deep analysis complete");
-    await load();
-  }finally{b.disabled=false;b.textContent="✦ Run Claude deep analysis"}}
-load();
+route();
 window.addEventListener("resize",()=>drawSparks());
 </script>
 </body>
