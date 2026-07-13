@@ -17,7 +17,7 @@ import random
 from functools import lru_cache
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 SCENE_W, SCENE_H = 1350, 2400          # 1.25x of 1080x1920
 PRIMARY_Y = 620                        # main content anchor (upper third)
@@ -334,6 +334,58 @@ def _figure(im, d, scene, theme, rng):
         _draw_block(d, label, cx, SECONDARY_Y + 80, _font(52), (235, 235, 235), CONTENT_W - 120)
 
 
+def _photo_scene(im, d, scene, theme, rng, image_path):
+    """A real archival photo as a tilted, framed card in the upper zone, with the
+    scene's text stacked in the lower third (clear of hook card and captions)."""
+    accent = _rgb(theme["accent"])
+    try:
+        photo = Image.open(image_path).convert("RGB")
+    except Exception:
+        return _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+
+    box_w, box_h = 940, 850
+    scale = max(box_w / photo.width, box_h / photo.height)
+    photo = photo.resize((int(photo.width * scale) + 1, int(photo.height * scale) + 1), Image.LANCZOS)
+    left = (photo.width - box_w) // 2
+    top = max(0, (photo.height - box_h) // 3)  # bias toward the top (faces live there)
+    photo = photo.crop((left, top, left + box_w, top + box_h))
+
+    border = 16
+    card = Image.new("RGBA", (box_w + border * 2, box_h + border * 2), (245, 245, 242, 255))
+    mask = Image.new("L", photo.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, photo.width, photo.height], radius=26, fill=255)
+    card.paste(photo, (border, border), mask)
+    cd = ImageDraw.Draw(card)
+    cd.rounded_rectangle([0, 0, card.width - 1, card.height - 1], radius=34,
+                         outline=(*accent, 255), width=5)
+    card = card.rotate(rng.uniform(-3.2, 3.2), expand=True, resample=Image.BICUBIC)
+
+    shadow = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    cx, cy = SCENE_W // 2, 590
+    sd.rounded_rectangle([cx - card.width // 2 + 14, cy - card.height // 2 + 20,
+                          cx + card.width // 2 + 14, cy + card.height // 2 + 20],
+                         radius=40, fill=(0, 0, 0, 110))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(22))
+    im.alpha_composite(shadow)
+    im.paste(card, (cx - card.width // 2, cy - card.height // 2), card)
+
+    d = ImageDraw.Draw(im, "RGBA")
+    y = SECONDARY_Y - 190
+    head = scene.get("headline") or ""
+    if head:
+        f = _fit(d, head, CONTENT_W, 96, max_lines=2)
+        y = _draw_block(d, head, SCENE_W // 2, y, f, (255, 255, 255), CONTENT_W) + 8
+    value = scene.get("value") or ""
+    if value:
+        f = _fit(d, value, CONTENT_W, 150, min_size=70, max_lines=1)
+        d.text((SCENE_W // 2, y + f.size // 2), value, font=f, fill=(*accent, 255), anchor="mm")
+        y += int(f.size * 1.25)
+    label = scene.get("label") or scene.get("sub") or ""
+    if label:
+        _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
+
+
 _DISPATCH = {
     "ambient": _ambient, "title_card": _title_card, "big_stat": _big_stat,
     "chart_up": _chart_up, "timeline": _timeline, "quote": _quote,
@@ -341,13 +393,18 @@ _DISPATCH = {
 }
 
 
-def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path) -> Path:
-    """Draw one scene card to PNG (1350x2400)."""
+def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path,
+                 image_path: str | Path | None = None) -> Path:
+    """Draw one scene card to PNG (1350x2400). If image_path is given, the scene
+    becomes a photo card (real archival image) with its text in the lower third."""
     out_png = Path(out_png)
     rng = random.Random(seed)
     im = _background(theme, seed)
     d = ImageDraw.Draw(im, "RGBA")
-    _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+    if image_path and Path(image_path).exists():
+        _photo_scene(im, d, scene, theme, rng, image_path)
+    else:
+        _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
     # bake the emoji into the card only when the top zone is free of text —
     # other kinds still get the animated pop-in emoji at render time
     if scene.get("kind", "ambient") in ("ambient", "big_stat", "quote"):

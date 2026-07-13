@@ -23,6 +23,9 @@ def build(script, channel) -> dict:
 
     hashtags = " ".join(f"#{re.sub(r'[^A-Za-z0-9]', '', t)}" for t in tag_words[:3] if t)
     description = f"{script.hook}\n\n{script.description.strip()}\n\n{hashtags}\n\n{DISCLOSURE}"
+    credits = getattr(script, "image_credits", None) or []
+    if credits:
+        description += "\nImages: " + " · ".join(credits[:8])
 
     return {
         "title": title,

@@ -9,8 +9,8 @@ import re
 import time
 from pathlib import Path
 
-from . import (formula, ideate, publish, review, scenes as scenes_mod, scriptgen,
-               voice as voice_mod, render as render_mod, visuals)
+from . import (formula, ideate, images, publish, review, scenes as scenes_mod,
+               scriptgen, voice as voice_mod, render as render_mod, visuals)
 
 
 def _slug(text: str, maxlen: int = 40) -> str:
@@ -56,13 +56,14 @@ def _aligned_scenes(script) -> list[dict]:
     """One scene per segment (hook + beats + payoff): pad with ambient, drop extras."""
     need = 2 + len(script.beats)
     empty = {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "",
-             "points": [], "emoji": ""}
+             "points": [], "emoji": "", "image_query": ""}
     out = [dict(empty, **s) for s in (script.scenes or [])[:need] if isinstance(s, dict)]
     while len(out) < need:
         out.append(dict(empty))
     # the hook card owns the top of the screen while scene 1 plays — any scene
     # kind that puts content up there would collide, so the opener is always ambient
     out[0]["kind"] = "ambient"
+    out[0]["image_query"] = ""
     return out
 
 
@@ -73,10 +74,13 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
     if channel.visual_style == "scenes":
         try:
             scene_list = _aligned_scenes(script)
+            script.scenes = scene_list  # aligned view, so image indices match
+            photo_paths = images.resolve_for_script(cfg, script)  # never raises
             seg_ends = _segment_ends(script, words)
             pngs = []
             for i, sc in enumerate(scene_list):
-                pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png"))
+                pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png",
+                                                    image_path=photo_paths.get(i)))
             return render_mod.render_story(wav, words, pngs, seg_ends, out_mp4,
                                            theme=theme, workdir=workdir,
                                            segment_emojis=[s.get("emoji", "") for s in scene_list],
@@ -129,7 +133,8 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
     path, duration = _render_final(cfg, channel, script, wav, words, out_mp4,
                                    workdir, seed, log=ledger.log)
 
-    ledger.set_video(video_id, video_path=str(path), duration=duration, status="rendered")
+    ledger.set_video(video_id, video_path=str(path), duration=duration, status="rendered",
+                     script=json.dumps(script.to_dict()))  # persists image credits
     ledger.log("rendered", f"video {video_id} ({duration:.1f}s) -> {path}")
     return video_id
 
@@ -161,7 +166,8 @@ def revoice_video(cfg, channel, ledger, video_id: int, engine=None) -> tuple[str
     seed = video_id * 7919 + 17
     path, duration = _render_final(cfg, channel, script, wav, words, out_mp4,
                                    workdir, seed, log=ledger.log)
-    ledger.set_video(video_id, video_path=str(path), duration=duration)
+    ledger.set_video(video_id, video_path=str(path), duration=duration,
+                     script=json.dumps(script.to_dict()))  # persists image credits
     ledger.log("revoiced", f"video {video_id} ({duration:.1f}s, engine={getattr(engine, 'name', '?')})")
     return str(path), duration
 

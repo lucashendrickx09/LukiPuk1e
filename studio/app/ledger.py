@@ -163,7 +163,7 @@ class Ledger:
         return self.db.execute(q, args).fetchall()
 
     def set_video(self, video_id: int, **fields):
-        allowed = {"video_path", "duration", "status", "reject_reason", "score"}
+        allowed = {"video_path", "duration", "status", "reject_reason", "score", "script"}
         sets, args = [], []
         for k, v in fields.items():
             if k not in allowed:

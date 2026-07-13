@@ -20,7 +20,8 @@ content — which is also your inauthentic-content-policy shield.
 | Starfield | tiny white pinpricks, ~16% accent green, rare 4-point sparkles; unique per video (seeded) |
 | Accent | `#35E87A` — the ONLY color besides white/near-black. Money, growth, highlights |
 | Text | DejaVu Sans Bold; white body, accent for emphasis; numbers always accent or oversized |
-| Graphics | flat vector shapes with glow strokes — charts, rings, timelines, silhouettes. Never photos, never stock |
+| Graphics | flat vector shapes with glow strokes — charts, rings, timelines, silhouettes |
+| Photos | real archival images as framed, tilted photo-cards — **Wikimedia Commons only** (public domain / CC-BY / CC-BY-SA, never NC/ND), auto-credited in the description. Real people appear via licensed photos, never stock filler |
 | Emoji | real color emoji as punctuation, 1 per scene, amplifying emotion not decorating |
 
 **Video style (locked):**
@@ -33,9 +34,10 @@ content — which is also your inauthentic-content-policy shield.
 | Sound | whoosh under every cut, pop on emoji land, voice loudness −14 LUFS |
 | Voice | one consistent voice per channel, ~1.08× pace |
 
-**Don'ts:** no third color, no photos/stock footage, no faces of real people
-(silhouette + name + number instead), no music beds until we A/B them, no breaking
-the caption center band, no more than 2 emoji on screen at once.
+**Don'ts:** no third color, no stock-footage filler, no unlicensed images (the
+image engine only accepts PD/CC-BY/CC-BY-SA from Commons), no music beds until
+we A/B them, no breaking the caption center band, no more than 2 emoji on screen
+at once.
 
 ---
 

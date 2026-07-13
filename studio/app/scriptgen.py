@@ -29,8 +29,10 @@ SCENE_SCHEMA = {
                    "description": "chart_up y-values, 4-8 rising numbers; empty list if unused"},
         "emoji": {"type": "string",
                   "description": "1-2 emoji that visualize this segment — they pop on screen while it's spoken (e.g. '💰', '📈🔥', '🤯'). Empty string only if nothing fits."},
+        "image_query": {"type": "string",
+                        "description": "For scenes about a real person/company/place: what archival photo to show, as a Wikimedia Commons search (e.g. 'Sam Walton', 'Walmart store 1970', 'Colonel Sanders'). Empty string for abstract scenes and ALWAYS empty for scene 1."},
     },
-    "required": ["kind", "headline", "sub", "value", "label", "points", "emoji"],
+    "required": ["kind", "headline", "sub", "value", "label", "points", "emoji", "image_query"],
     "additionalProperties": False,
 }
 
@@ -94,7 +96,13 @@ that best VISUALIZES the segment being spoken over it:
 Numbers in scenes must match numbers spoken in the segment. Give almost every
 scene an emoji — it pops on screen while the segment is spoken and is part of
 the channel's eye-catching style. Pick emoji that amplify the emotion of the
-beat (money, shock, growth, fire), not decoration for its own sake."""
+beat (money, shock, growth, fire), not decoration for its own sake.
+
+When a segment is about a real person, company, or place, set image_query so a
+real archival photo (Wikimedia Commons, license-checked) appears on screen —
+seeing the actual person is a retention anchor. Use the most famous form of the
+name ('Colonel Sanders', not 'Harland David Sanders portrait 1974'). figure
+scenes about a person should almost always carry an image_query."""
 
 USER_PROMPT = """Topic: {topic}
 Angle: {angle}
@@ -115,6 +123,7 @@ class Script:
     format: str = "explainer"
     pin_comment: str = ""
     scenes: list[dict] = field(default_factory=list)
+    image_credits: list[str] = field(default_factory=list)  # filled at produce/render time
 
     def spoken_text(self) -> str:
         parts = [self.hook, *self.beats, self.payoff, self.loop_line]
