@@ -30,7 +30,7 @@ SCENE_SCHEMA = {
         "emoji": {"type": "string",
                   "description": "1-2 emoji that visualize this segment — they pop on screen while it's spoken (e.g. '💰', '📈🔥', '🤯'). Empty string only if nothing fits."},
         "image_query": {"type": "string",
-                        "description": "For scenes about a real person/company/place: what archival photo to show, as a Wikimedia Commons search (e.g. 'Sam Walton', 'Walmart store 1970', 'Colonel Sanders'). Empty string for abstract scenes and ALWAYS empty for scene 1."},
+                        "description": "1-3 archival photo searches separated by ';' — each becomes its own visual cut while this segment is spoken (e.g. 'Colonel Sanders;1950s roadside diner;vintage KFC bucket'). Photos TELL the story: most beats about real people/companies/places should carry 2-3. Empty string for abstract scenes and ALWAYS empty for scene 1."},
     },
     "required": ["kind", "headline", "sub", "value", "label", "points", "emoji", "image_query"],
     "additionalProperties": False,
@@ -98,11 +98,14 @@ scene an emoji — it pops on screen while the segment is spoken and is part of
 the channel's eye-catching style. Pick emoji that amplify the emotion of the
 beat (money, shock, growth, fire), not decoration for its own sake.
 
-When a segment is about a real person, company, or place, set image_query so a
-real archival photo (Wikimedia Commons, license-checked) appears on screen —
-seeing the actual person is a retention anchor. Use the most famous form of the
-name ('Colonel Sanders', not 'Harland David Sanders portrait 1974'). figure
-scenes about a person should almost always carry an image_query."""
+Photos carry the story. When a segment involves a real person, company, or
+place, set image_query to 1-3 searches separated by ';' — each becomes its own
+cut on screen while the segment is spoken (person; place; object works well).
+Images come from Wikimedia Commons/Openverse (license-checked archival photos),
+so query what actually exists: use the most famous form of a name ('Colonel
+Sanders', not 'Harland David Sanders portrait 1974') and generic-but-vivid
+scene-setters for places and eras ('1950s American diner', 'Brooklyn waterfront').
+figure scenes about a person should almost always carry their name as a query."""
 
 USER_PROMPT = """Topic: {topic}
 Angle: {angle}

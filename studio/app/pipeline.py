@@ -67,6 +67,29 @@ def _aligned_scenes(script) -> list[dict]:
     return out
 
 
+MIN_SUBCUT_SECONDS = 0.9  # a photo cut shorter than this reads as a glitch
+
+
+def _expand_photo_cuts(scene_list, seg_ends, photo_map):
+    """Photos tell the story: a scene with N photos becomes N visual cuts inside
+    its segment. Returns (render_specs, expanded_ends, expanded_emojis) where
+    each spec is (scene, image_path|None). The emoji pops once per scene."""
+    specs, ends, emojis = [], [], []
+    prev = 0.0
+    for i, sc in enumerate(scene_list):
+        seg_end = seg_ends[i]
+        seg_dur = max(0.01, seg_end - prev)
+        imgs = photo_map.get(i) or []
+        n = min(len(imgs), max(1, int(seg_dur / MIN_SUBCUT_SECONDS))) if imgs else 1
+        for k in range(n):
+            specs.append((sc, imgs[k] if imgs else None))
+            ends.append(prev + seg_dur * (k + 1) / n)
+            emojis.append(sc.get("emoji", "") if k == 0 else "")
+        prev = seg_end
+    ends[-1] = seg_ends[-1]
+    return specs, ends, emojis
+
+
 def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=None):
     """Scenes style with graceful fallback to the plain gradient renderer."""
     theme = visuals.theme_for(channel.theme)
@@ -75,15 +98,16 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
         try:
             scene_list = _aligned_scenes(script)
             script.scenes = scene_list  # aligned view, so image indices match
-            photo_paths = images.resolve_for_script(cfg, script)  # never raises
+            photo_map = images.resolve_for_script(cfg, script)  # never raises
             seg_ends = _segment_ends(script, words)
+            specs, ends, emojis = _expand_photo_cuts(scene_list, seg_ends, photo_map)
             pngs = []
-            for i, sc in enumerate(scene_list):
+            for i, (sc, img) in enumerate(specs):
                 pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png",
-                                                    image_path=photo_paths.get(i)))
-            return render_mod.render_story(wav, words, pngs, seg_ends, out_mp4,
+                                                    image_path=img))
+            return render_mod.render_story(wav, words, pngs, ends, out_mp4,
                                            theme=theme, workdir=workdir,
-                                           segment_emojis=[s.get("emoji", "") for s in scene_list],
+                                           segment_emojis=emojis,
                                            sfx_dir=(cfg.data_dir / "sfx") if cfg.sfx else None,
                                            **hook_kwargs)
         except Exception as e:

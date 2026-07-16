@@ -386,6 +386,52 @@ def _photo_scene(im, d, scene, theme, rng, image_path):
         _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
 
 
+def _photo_text_block(im, scene, theme):
+    """Scene text stacked in the lower third — shared by both photo styles."""
+    d = ImageDraw.Draw(im, "RGBA")
+    accent = _rgb(theme["accent"])
+    y = SECONDARY_Y - 190
+    head = scene.get("headline") or ""
+    if head:
+        f = _fit(d, head, CONTENT_W, 96, max_lines=2)
+        y = _draw_block(d, head, SCENE_W // 2, y, f, (255, 255, 255), CONTENT_W) + 8
+    value = scene.get("value") or ""
+    if value:
+        f = _fit(d, value, CONTENT_W, 150, min_size=70, max_lines=1)
+        d.text((SCENE_W // 2, y + f.size // 2), value, font=f, fill=(*accent, 255), anchor="mm")
+        y += int(f.size * 1.25)
+    label = scene.get("label") or scene.get("sub") or ""
+    if label:
+        _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
+
+
+def _photo_full(scene, theme, rng, image_path) -> Image.Image:
+    """Full-bleed archival photo: cover-cropped to the frame, graded dark at the
+    top (hook card zone) and bottom (text zone) so type stays readable. The
+    punch-in zoom animates it at render time — the classic story-short look."""
+    photo = Image.open(image_path).convert("RGB")
+    scale = max(SCENE_W / photo.width, SCENE_H / photo.height)
+    photo = photo.resize((int(photo.width * scale) + 1, int(photo.height * scale) + 1), Image.LANCZOS)
+    left = (photo.width - SCENE_W) // 2
+    top = max(0, (photo.height - SCENE_H) // 3)
+    im = photo.crop((left, top, left + SCENE_W, top + SCENE_H)).convert("RGBA")
+
+    grade = Image.new("RGBA", (SCENE_W, SCENE_H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(grade)
+    gd.rectangle([0, 0, SCENE_W, SCENE_H], fill=(4, 6, 5, 70))          # global dim
+    for y in range(0, 620):                                              # hook zone
+        gd.line([(0, y), (SCENE_W, y)], fill=(4, 6, 5, int(170 * (1 - y / 620))))
+    for y in range(1500, SCENE_H):                                       # text zone
+        t = (y - 1500) / (SCENE_H - 1500)
+        gd.line([(0, y), (SCENE_W, y)], fill=(4, 6, 5, int(215 * t)))
+    im = Image.alpha_composite(im, grade)
+
+    accent = _rgb(theme["accent"])
+    d = ImageDraw.Draw(im, "RGBA")
+    d.rectangle([0, SCENE_H - 8, SCENE_W, SCENE_H], fill=(*accent, 200))  # brand keel
+    return im
+
+
 _DISPATCH = {
     "ambient": _ambient, "title_card": _title_card, "big_stat": _big_stat,
     "chart_up": _chart_up, "timeline": _timeline, "quote": _quote,
@@ -394,17 +440,36 @@ _DISPATCH = {
 
 
 def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path,
-                 image_path: str | Path | None = None) -> Path:
-    """Draw one scene card to PNG (1350x2400). If image_path is given, the scene
-    becomes a photo card (real archival image) with its text in the lower third."""
+                 image_path: str | Path | None = None,
+                 image_style: str = "auto") -> Path:
+    """Draw one scene card to PNG (1350x2400).
+
+    With an image: 'card' = framed tilted photo-card (portraits/figure scenes),
+    'full' = full-bleed graded photo (story beats), 'auto' picks by scene kind.
+    Without an image (or if it fails to load): the drawn Starfield Noir styles.
+    """
     out_png = Path(out_png)
     rng = random.Random(seed)
+    if image_path and Path(image_path).exists():
+        style = image_style
+        if style == "auto":
+            style = "card" if scene.get("kind") == "figure" else "full"
+        try:
+            if style == "full":
+                im = _photo_full(scene, theme, rng, image_path)
+                _photo_text_block(im, scene, theme)
+                im.convert("RGB").save(out_png, "PNG")
+                return out_png
+            im = _background(theme, seed)
+            d = ImageDraw.Draw(im, "RGBA")
+            _photo_scene(im, d, scene, theme, rng, image_path)
+            im.convert("RGB").save(out_png, "PNG")
+            return out_png
+        except Exception:
+            pass  # unreadable image -> drawn style below
     im = _background(theme, seed)
     d = ImageDraw.Draw(im, "RGBA")
-    if image_path and Path(image_path).exists():
-        _photo_scene(im, d, scene, theme, rng, image_path)
-    else:
-        _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+    _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
     # bake the emoji into the card only when the top zone is free of text —
     # other kinds still get the animated pop-in emoji at render time
     if scene.get("kind", "ambient") in ("ambient", "big_stat", "quote"):

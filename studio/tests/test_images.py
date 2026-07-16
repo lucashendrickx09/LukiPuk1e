@@ -36,11 +36,46 @@ def test_resolve_skips_hook_scene_and_collects_credits(cfg, tmp_path, monkeypatc
     monkeypatch.setattr(images, "ensure", lambda d, q: (fake, f"credit for {q}"))
     script = Script.from_dict(GOOD_SCRIPT)
     script.scenes[0]["image_query"] = "should be ignored"   # hook scene
-    script.scenes[1]["image_query"] = "Sam Walton"
+    script.scenes[1]["image_query"] = "Sam Walton;Walmart store;Arkansas 1960s"
     script.scenes[2]["image_query"] = "Sam Walton"          # duplicate credit collapses
     paths = images.resolve_for_script(cfg, script)
-    assert 0 not in paths and 1 in paths and 2 in paths
-    assert script.image_credits == ["credit for Sam Walton"]
+    assert 0 not in paths
+    assert len(paths[1]) == 3                                # one path per ';' query
+    assert len(paths[2]) == 1
+    assert script.image_credits == ["credit for Sam Walton",
+                                    "credit for Walmart store",
+                                    "credit for Arkansas 1960s"]
+
+
+def test_expand_photo_cuts_math():
+    from app.pipeline import _expand_photo_cuts
+    scenes_list = [{"emoji": "🧠"}, {"emoji": "💰"}, {"emoji": ""}]
+    seg_ends = [3.0, 9.0, 12.0]
+    photo_map = {1: ["a.jpg", "b.jpg", "c.jpg"]}
+    specs, ends, emojis = _expand_photo_cuts(scenes_list, seg_ends, photo_map)
+    assert len(specs) == 5                                   # 1 + 3 + 1
+    assert [s[1] for s in specs] == [None, "a.jpg", "b.jpg", "c.jpg", None]
+    assert ends == [3.0, 5.0, 7.0, 9.0, 12.0]
+    assert emojis == ["🧠", "💰", "", "", ""]                # emoji pops once per scene
+    # a short segment can't absorb 3 cuts: 1.5s / 0.9s floor -> 1 cut
+    specs2, ends2, _ = _expand_photo_cuts([{"emoji": ""}, {"emoji": ""}],
+                                          [1.5, 4.0], {0: ["a.jpg", "b.jpg", "c.jpg"]})
+    assert len(specs2) == 2 and ends2 == [1.5, 4.0]
+
+
+def test_full_bleed_photo_render(tmp_path):
+    photo = tmp_path / "photo.jpg"
+    Image.new("RGB", (1600, 900), (140, 110, 90)).save(photo)
+    scene = {"kind": "title_card", "headline": "The empire begins", "value": "",
+             "label": "Bentonville, 1962", "sub": "", "points": [], "emoji": ""}
+    out = scenes.render_scene(scene, THEME, seed=4, out_png=tmp_path / "f.png",
+                              image_path=photo)  # non-figure kind -> full bleed
+    im = Image.open(out).convert("RGB")
+    assert im.size == (scenes.SCENE_W, scenes.SCENE_H)
+    mid = im.getpixel((scenes.SCENE_W // 2, 1100))
+    assert sum(mid) > 120, f"expected photo pixels mid-frame, got {mid}"
+    top = im.getpixel((scenes.SCENE_W // 2, 30))
+    assert sum(top) < sum(mid), "top should be graded darker for the hook zone"
 
 
 def test_photo_scene_renders(tmp_path):

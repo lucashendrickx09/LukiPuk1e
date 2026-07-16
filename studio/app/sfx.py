@@ -53,7 +53,7 @@ def ensure(cache_dir: str | Path) -> dict[str, Path]:
 
 
 def story_events(cut_times: list[float], emoji_times: list[float],
-                 bank: dict[str, Path], max_events: int = 16) -> list[tuple[Path, float, float]]:
+                 bank: dict[str, Path], max_events: int = 24) -> list[tuple[Path, float, float]]:
     """(wav, at_seconds, gain) for a story render: whoosh slightly before each cut
     lands, pop when each emoji drops in."""
     events: list[tuple[Path, float, float]] = []

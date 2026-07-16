@@ -21,6 +21,7 @@ import urllib.request
 from pathlib import Path
 
 API = "https://commons.wikimedia.org/w/api.php"
+OPENVERSE = "https://api.openverse.org/v1/images/"
 UA = "ShortsStudio/1.0 (channel production tool; respects WMF UA policy)"
 
 _OK = ("public domain", "pd-", "pd ", "cc0", "cc-by", "cc by", "attribution")
@@ -83,6 +84,41 @@ def search(query: str, limit: int = 8) -> list[dict]:
     return out
 
 
+def search_openverse(query: str, limit: int = 8) -> list[dict]:
+    """Second source: Openverse (CC-licensed images across the open web).
+    Only commercial-use licenses are requested; NC/ND never appear."""
+    params = urllib.parse.urlencode({
+        "q": query, "license": "cc0,pdm,by,by-sa", "page_size": limit,
+        "mature": "false", "fields": "url,license,creator,width",
+    })
+    req = urllib.request.Request(f"{OPENVERSE}?{params}", headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        data = json.loads(resp.read())
+    out = []
+    for item in data.get("results", []):
+        url = item.get("url") or ""
+        if (item.get("width") or 0) < MIN_WIDTH or not url.lower().endswith((".jpg", ".jpeg", ".png")):
+            continue
+        lic = (item.get("license") or "").upper()
+        creator = _strip_html(item.get("creator") or "")[:80]
+        out.append({"url": url, "title": item.get("title", ""),
+                    "license": f"CC {lic}" if lic not in ("CC0", "PDM") else lic,
+                    "artist": creator,
+                    "credit": f"{creator or 'Openverse'} (CC {lic})"})
+    return out
+
+
+def candidates_for(query: str) -> list[dict]:
+    """Commons first (best for notable people/places), Openverse to fill gaps."""
+    out = []
+    for source in (search, search_openverse):
+        try:
+            out.extend(source(query))
+        except Exception:
+            continue
+    return out
+
+
 def _cache_key(query: str) -> str:
     return hashlib.sha1(query.strip().lower().encode()).hexdigest()[:16]
 
@@ -105,7 +141,7 @@ def ensure(cache_dir: str | Path, query: str) -> tuple[Path | None, str | None]:
         if img.exists():
             return img, meta["credit"]
     try:
-        candidates = search(query)
+        candidates = candidates_for(query)
         for cand in candidates:
             ext = ".png" if cand["url"].lower().endswith(".png") else ".jpg"
             img = cache_dir / f"{key}{ext}"
@@ -124,21 +160,25 @@ def ensure(cache_dir: str | Path, query: str) -> tuple[Path | None, str | None]:
     return None, None
 
 
-def resolve_for_script(cfg, script) -> dict[int, str]:
-    """Fetch images for every scene with an image_query. Returns {scene_index: path}
-    and records the credits on the script (they end up in the video description)."""
-    paths: dict[int, str] = {}
+def resolve_for_script(cfg, script) -> dict[int, list[str]]:
+    """Fetch images for every scene. image_query holds 1-3 searches separated by
+    ';' — each becomes its own visual cut inside the scene's segment. Returns
+    {scene_index: [paths]} and records credits on the script (they end up in the
+    video description)."""
+    paths: dict[int, list[str]] = {}
     credits = list(getattr(script, "image_credits", []) or [])
     for i, scene in enumerate(script.scenes or []):
-        if not isinstance(scene, dict):
+        if not isinstance(scene, dict) or i == 0:  # the hook scene stays ambient
             continue
-        query = (scene.get("image_query") or "").strip()
-        if not query or i == 0:  # the hook scene stays ambient
-            continue
-        path, credit = ensure(cfg.data_dir / "images", query)
-        if path:
-            paths[i] = str(path)
-            if credit and credit not in credits:
-                credits.append(credit)
+        queries = [q.strip() for q in (scene.get("image_query") or "").split(";") if q.strip()][:3]
+        found: list[str] = []
+        for query in queries:
+            path, credit = ensure(cfg.data_dir / "images", query)
+            if path:
+                found.append(str(path))
+                if credit and credit not in credits:
+                    credits.append(credit)
+        if found:
+            paths[i] = found
     script.image_credits = credits
     return paths
