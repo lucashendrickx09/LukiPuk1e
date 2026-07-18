@@ -25,8 +25,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Pop,{font},{size},{accent},{base},&H00101010,&H96000000,-1,0,0,0,100,100,1,0,1,{outline},2,5,60,60,{margin_v},1
-Style: Hook,{font},76,{accent},{accent},&H00101010,&H96000000,-1,0,0,0,100,100,1,0,1,6,2,8,70,70,340,1
+Style: Pop,{font},{size},{accent},{base},&H00090C0A,&HB4000000,-1,0,0,0,100,100,1.5,0,1,{outline},4,5,60,60,{margin_v},1
+Style: Hook,{font},76,{accent},{accent},&H00090C0A,&HB4000000,-1,0,0,0,100,100,1.5,0,1,7,3,8,70,70,340,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -70,10 +70,10 @@ _EMPHASIS_RE = re.compile(r"[\d$%€£]")
 
 
 def build_ass(words: list[Word], out_path: str | Path, *, accent: str = "#FFD400",
-              base: str = "#FFFFFF", font: str = "DejaVu Sans", size: int = 112,
-              margin_v: int = 780, outline: int = 7,
+              base: str = "#FFFFFF", font: str = "Roboto Black", size: int = 112,
+              margin_v: int = 780, outline: int = 8,
               hook_text: str | None = None, hook_until: float | None = None,
-              animate: bool = True, seed: int = 7) -> Path:
+              animate: bool = True, uppercase: bool = True, seed: int = 7) -> Path:
     """margin_v=780 with Alignment=5 centers the block slightly below mid-screen,
     clear of the Shorts UI (title at bottom, buttons at right).
 
@@ -108,7 +108,8 @@ def build_ass(words: list[Word], out_path: str | Path, *, accent: str = "#FFD400
             elif prev_emph:
                 tag += f"\\fs{size}"
             prev_emph = emph
-            parts.append(f"{{{tag}}}{_esc(w.text)}")
+            token = w.text.upper() if uppercase else w.text
+            parts.append(f"{{{tag}}}{_esc(token)}")
             cursor = w.end
         pop = ""
         if animate:

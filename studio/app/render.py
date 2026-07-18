@@ -59,17 +59,31 @@ def build_story_command(scene_durs: list[tuple[Path, float]], voice_wav: Path,
     inputs: list[str] = []
     chains: list[str] = []
     n = len(scene_durs)
-    for i, (png, dur) in enumerate(scene_durs):
+    for i, spec in enumerate(scene_durs):
+        png, dur = spec[0], spec[1]
+        motion = spec[2] if len(spec) > 2 else "punch"
+        flash = spec[3] if len(spec) > 3 else False
         inputs += ["-loop", "1", "-t", f"{dur:.3f}", "-i", str(png)]
-        # every cut lands zoomed 1.14 and snaps to 1.02 in 6 frames (the punch),
-        # then drifts — in on even scenes, out on odd — so nothing ever sits still
-        drift_in = f"min(1.02+{ZOOM_RATE}*(on-6)\\,1.13)"
-        drift_out = f"max(1.02-{ZOOM_RATE}*(on-6)\\,1.0)"
-        z = f"if(lte(on\\,6)\\,1.14-0.02*on\\,{drift_in if i % 2 == 0 else drift_out})"
-        chains.append(
-            f"[{i}:v]fps={visuals.FPS},zoompan=z='{z}'"
-            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-            f":d=1:s={visuals.W}x{visuals.H}:fps={visuals.FPS},setsar=1[s{i}]")
+        frames = max(2, int(dur * visuals.FPS))
+        if motion == "pan":
+            # documentary pan across the photo at a fixed zoom; direction alternates
+            z = "1.08"
+            prog = f"(on/{frames})" if i % 2 == 0 else f"(1-on/{frames})"
+            x = f"(iw-iw/zoom)*{prog}"
+            y = "ih/2-(ih/zoom/2)"
+        else:
+            # every cut lands zoomed 1.14 and snaps to 1.02 in 6 frames (the
+            # punch), then drifts — in or out — so nothing ever sits still
+            drift_in = f"min(1.02+{ZOOM_RATE}*(on-6)\\,1.13)"
+            drift_out = f"max(1.02-{ZOOM_RATE}*(on-6)\\,1.0)"
+            z = f"if(lte(on\\,6)\\,1.14-0.02*on\\,{drift_in if i % 2 == 0 else drift_out})"
+            x = "iw/2-(iw/zoom/2)"
+            y = "ih/2-(ih/zoom/2)"
+        chain = (f"[{i}:v]fps={visuals.FPS},zoompan=z='{z}':x='{x}':y='{y}'"
+                 f":d=1:s={visuals.W}x{visuals.H}:fps={visuals.FPS},setsar=1")
+        if flash:
+            chain += ",fade=t=in:st=0:d=0.07:c=white"  # impact flash on beat changes
+        chains.append(chain + f"[s{i}]")
     concat = "".join(f"[s{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[bg0]"
     chains.append(concat)
 
@@ -131,6 +145,7 @@ def render_story(voice_wav: Path, words: list[Word], scene_files: list[Path],
                  hook_text: str | None = None, hook_seconds: float | None = None,
                  segment_emojis: list[str] | None = None,
                  sfx_dir: Path | None = None,
+                 motions: list[tuple[str, bool]] | None = None,
                  workdir: Path | None = None) -> tuple[Path, float]:
     """Render the story-scene version of a short. seg_ends are per-segment end
     times on the voice timeline (one per scene, ascending). segment_emojis (same
@@ -185,7 +200,11 @@ def render_story(voice_wav: Path, words: list[Word], scene_files: list[Path],
         except Exception:
             events = []  # sound is enhancement, never a render blocker
 
-    cmd = build_story_command(list(zip(scene_files, durs)), voice_wav, ass_path,
+    if motions and len(motions) == len(scene_files):
+        scene_specs = [(f, d, m[0], m[1]) for f, d, m in zip(scene_files, durs, motions)]
+    else:
+        scene_specs = list(zip(scene_files, durs))
+    cmd = build_story_command(scene_specs, voice_wav, ass_path,
                               out_mp4, theme, total, emoji_overlays=overlays,
                               sfx_events=events)
     proc = subprocess.run(cmd, capture_output=True, text=True)

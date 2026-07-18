@@ -9,6 +9,9 @@ side of YouTube's inauthentic-content policy, and render in seconds on any CPU.
 from __future__ import annotations
 
 import random
+from pathlib import Path
+
+ASSETS_FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
 # Each theme: gradient colors (3), caption accent, progress bar color.
 # "stars": scatter tiny stars into the background (scene renderer).
@@ -56,7 +59,11 @@ def video_filters(theme: dict, duration: float, ass_path: str, progress_bar: boo
     if progress_bar:
         # drawbox width grows with t — reads as "almost done, stay" (retention aid)
         steps.append(f"drawbox=x=0:y=ih-14:w=iw*min(t/{duration:.3f}\\,1):h=14:color={bar_color}@0.9:t=fill")
-    ass_escaped = ass_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-    steps.append(f"ass='{ass_escaped}'")
+    def _esc(p: str) -> str:
+        return p.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    ass_arg = f"ass='{_esc(ass_path)}'"
+    if ASSETS_FONTS.exists():  # bundled Roboto Black -> captions match the scenes
+        ass_arg += f":fontsdir='{_esc(str(ASSETS_FONTS))}'"
+    steps.append(ass_arg)
     steps.append("format=yuv420p")
     return ",".join(steps)

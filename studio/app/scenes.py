@@ -27,10 +27,20 @@ CONTENT_W = 1120                       # max text width
 KINDS = ("ambient", "title_card", "big_stat", "chart_up", "timeline",
          "quote", "list_reveal", "figure")
 
+ASSETS_FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+
+# Heavy display face first (bundled with the repo — Apache 2.0), then system fallbacks.
 _FONT_PATHS = [
+    str(ASSETS_FONTS / "Roboto-Black.ttf"),
+    "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Black.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+]
+_FONT_PATHS_BOLD = [
+    str(ASSETS_FONTS / "Roboto-Bold.ttf"),
+    "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf",
+    *_FONT_PATHS[2:],
 ]
 _EMOJI_PATHS = [
     "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",   # linux (fonts-noto-color-emoji)
@@ -38,14 +48,33 @@ _EMOJI_PATHS = [
 ]
 
 
-@lru_cache(maxsize=64)
-def _font(size: int) -> ImageFont.FreeTypeFont:
-    for p in _FONT_PATHS:
+@lru_cache(maxsize=96)
+def _font(size: int, weight: str = "black") -> ImageFont.FreeTypeFont:
+    for p in (_FONT_PATHS if weight == "black" else _FONT_PATHS_BOLD):
         try:
             return ImageFont.truetype(p, size)
         except OSError:
             continue
     return ImageFont.load_default(size=size)
+
+
+def _glow_text(im: Image.Image, xy, text: str, font, fill, anchor="mm",
+               glow=(18, 90), shadow=(5, 7, 150)) -> None:
+    """Premium type: soft bloom behind + hard drop shadow under, then the text.
+    glow=(radius, alpha), shadow=(dx, dy, alpha)."""
+    layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.text(xy, text, font=font, fill=(*fill[:3], 255), anchor=anchor)
+    if glow:
+        bloom = layer.filter(ImageFilter.GaussianBlur(glow[0]))
+        bloom.putalpha(bloom.getchannel("A").point(lambda a: int(a * glow[1] / 255)))
+        im.alpha_composite(bloom)
+    if shadow:
+        sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        ImageDraw.Draw(sh).text((xy[0] + shadow[0], xy[1] + shadow[1]), text,
+                                font=font, fill=(5, 8, 6, shadow[2]), anchor=anchor)
+        im.alpha_composite(sh)
+    im.alpha_composite(layer)
 
 
 @lru_cache(maxsize=1)
@@ -179,6 +208,19 @@ def _background(theme: dict, seed: int) -> Image.Image:
             x, y = rng.randint(0, SCENE_W), rng.choice([rng.randint(0, 400), rng.randint(2000, SCENE_H)])
             od.ellipse([x - r, y - r, x + r, y + r], fill=(*_mix(c[1], accent, 0.3), 12))
     im = Image.alpha_composite(im.convert("RGBA"), overlay)
+    # a soft off-frame "studio light" in the accent hue + corner falloff: depth,
+    # not a flat backdrop
+    light = Image.new("RGBA", (SCENE_W, SCENE_H), (0, 0, 0, 0))
+    lg = ImageDraw.Draw(light)
+    lx = rng.choice([-200, SCENE_W + 200])
+    lg.ellipse([lx - 620, -520, lx + 620, 720], fill=(*accent, 34))
+    im.alpha_composite(light.filter(ImageFilter.GaussianBlur(180)))
+    vig = Image.new("RGBA", (SCENE_W, SCENE_H), (0, 0, 0, 0))
+    vd = ImageDraw.Draw(vig)
+    vd.rectangle([0, 0, SCENE_W, SCENE_H], fill=(0, 0, 0, 70))
+    vd.ellipse([-SCENE_W // 3, -SCENE_H // 5, SCENE_W + SCENE_W // 3, SCENE_H + SCENE_H // 5],
+               fill=(0, 0, 0, 0))
+    im.alpha_composite(vig.filter(ImageFilter.GaussianBlur(120)))
     return im
 
 
@@ -211,16 +253,22 @@ def _title_card(im, d, scene, theme, rng):
 def _big_stat(im, d, scene, theme, rng):
     accent = _rgb(theme["accent"])
     cx = SCENE_W // 2
-    r = 400
-    d.ellipse([cx - r, PRIMARY_Y - r + 40, cx + r, PRIMARY_Y + r + 40],
-              outline=(*accent, 46), width=10)
+    # double ring with a soft bloom — depth instead of a flat outline
+    ring = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    rd = ImageDraw.Draw(ring)
+    for r, w, a in ((400, 12, 120), (352, 4, 70)):
+        rd.ellipse([cx - r, PRIMARY_Y - r + 40, cx + r, PRIMARY_Y + r + 40],
+                   outline=(*accent, a), width=w)
+    im.alpha_composite(ring.filter(ImageFilter.GaussianBlur(10)))
+    im.alpha_composite(ring)
     value = scene.get("value") or scene.get("headline") or ""
     if value:
         f = _fit(d, value, CONTENT_W, 250, min_size=90, max_lines=1)
-        d.text((cx, PRIMARY_Y + 40), value, font=f, fill=(*accent, 255), anchor="mm")
+        _glow_text(im, (cx, PRIMARY_Y + 40), value, f, accent, glow=(26, 110), shadow=(6, 9, 160))
     label = scene.get("label") or scene.get("sub") or ""
     if label:
-        _draw_block(d, label, cx, PRIMARY_Y + 250, _font(58), (240, 240, 240), CONTENT_W - 140)
+        d = ImageDraw.Draw(im, "RGBA")
+        _draw_block(d, label, cx, PRIMARY_Y + 250, _font(56, "bold"), (240, 240, 240), CONTENT_W - 140)
 
 
 def _chart_up(im, d, scene, theme, rng):
@@ -239,17 +287,36 @@ def _chart_up(im, d, scene, theme, rng):
                y1 - (y1 - y0) * (p - lo) / span) for i, p in enumerate(pts)]
     for y in range(y0, y1 + 1, 125):  # faint grid
         d.line([(x0, y), (x1, y)], fill=(255, 255, 255, 22), width=2)
-    for width, alpha in ((26, 40), (14, 90), (7, 255)):  # glow stroke
-        d.line(coords, fill=(*accent, alpha), width=width, joint="curve")
+    # gradient area fill under the line (soft financial-chart depth)
+    area = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ad = ImageDraw.Draw(area)
+    ad.polygon([*coords, (coords[-1][0], y1), (coords[0][0], y1)], fill=(*accent, 70))
+    grad_mask = Image.new("L", im.size, 0)
+    gm = ImageDraw.Draw(grad_mask)
+    for y in range(y0 - 40, y1 + 1):
+        gm.line([(x0 - 30, y), (x1 + 60, y)],
+                fill=int(max(0, 255 * (1 - (y - y0 + 40) / (y1 - y0 + 40)))))
+    area.putalpha(Image.composite(area.getchannel("A"), Image.new("L", im.size, 0), grad_mask))
+    im.alpha_composite(area.filter(ImageFilter.GaussianBlur(2)))
+    # bloomed line
+    line = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(line)
+    ld.line(coords, fill=(*accent, 255), width=9, joint="curve")
+    lx, ly = coords[-1]
+    ld.polygon([(lx + 10, ly - 26), (lx + 52, ly - 2), (lx + 10, ly + 20)], fill=(*accent, 255))
+    bloom = line.filter(ImageFilter.GaussianBlur(14))
+    bloom.putalpha(bloom.getchannel("A").point(lambda a: int(a * 0.55)))
+    im.alpha_composite(bloom)
+    im.alpha_composite(line)
+    d = ImageDraw.Draw(im, "RGBA")
     for i, (x, y) in enumerate(coords):
         s = 16 if i == len(coords) - 1 else 9
         d.ellipse([x - s, y - s, x + s, y + s], fill=(255, 255, 255, 255))
-    # arrowhead on the last segment
-    lx, ly = coords[-1]
-    d.polygon([(lx + 10, ly - 26), (lx + 52, ly - 2), (lx + 10, ly + 20)], fill=(*accent, 255))
+        if i == len(coords) - 1:
+            d.ellipse([x - 26, y - 26, x + 26, y + 26], outline=(255, 255, 255, 90), width=3)
     label = scene.get("label") or scene.get("sub") or ""
     if label:
-        _draw_block(d, label, SCENE_W // 2, 1090, _font(54), (235, 235, 235), CONTENT_W)
+        _draw_block(d, label, SCENE_W // 2, 1090, _font(54, "bold"), (235, 235, 235), CONTENT_W)
 
 
 def _timeline(im, d, scene, theme, rng):
@@ -343,6 +410,7 @@ def _photo_scene(im, d, scene, theme, rng, image_path):
     except Exception:
         return _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
 
+    photo = _grade_photo(photo)
     box_w, box_h = 940, 850
     scale = max(box_w / photo.width, box_h / photo.height)
     photo = photo.resize((int(photo.width * scale) + 1, int(photo.height * scale) + 1), Image.LANCZOS)
@@ -405,11 +473,20 @@ def _photo_text_block(im, scene, theme):
         _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
 
 
+def _grade_photo(photo: Image.Image) -> Image.Image:
+    """Cinematic grade for archival images: contrast + saturation lift so raw
+    scans stop looking flat, without fighting the noir palette."""
+    from PIL import ImageEnhance
+    photo = ImageEnhance.Contrast(photo).enhance(1.10)
+    photo = ImageEnhance.Color(photo).enhance(1.08)
+    return ImageEnhance.Brightness(photo).enhance(0.99)
+
+
 def _photo_full(scene, theme, rng, image_path) -> Image.Image:
     """Full-bleed archival photo: cover-cropped to the frame, graded dark at the
     top (hook card zone) and bottom (text zone) so type stays readable. The
     punch-in zoom animates it at render time — the classic story-short look."""
-    photo = Image.open(image_path).convert("RGB")
+    photo = _grade_photo(Image.open(image_path).convert("RGB"))
     scale = max(SCENE_W / photo.width, SCENE_H / photo.height)
     photo = photo.resize((int(photo.width * scale) + 1, int(photo.height * scale) + 1), Image.LANCZOS)
     left = (photo.width - SCENE_W) // 2

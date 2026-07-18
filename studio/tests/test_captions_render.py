@@ -22,9 +22,13 @@ def test_ass_file_has_karaoke_tags(tmp_path):
     text = out.read_text()
     assert "PlayResX: 1080" in text and "PlayResY: 1920" in text
     assert "\\k" in text
-    assert "hello" in text and "world" in text
+    assert "HELLO" in text and "WORLD" in text  # captions are ALL CAPS by default
+    assert "Roboto Black" in text
     # accent #FFD400 -> ASS BGR &H0000D4FF
     assert "&H0000D4FF" in text
+    # opting out of uppercase keeps the words as written
+    out2 = captions.build_ass(words, tmp_path / "t2.ass", uppercase=False)
+    assert "hello" in out2.read_text()
 
 
 def test_hook_card_from_frame_zero(tmp_path):
@@ -46,8 +50,8 @@ def test_no_hook_card_without_hook_text(tmp_path):
 def test_ass_escapes_braces(tmp_path):
     words = [Word("{evil}", 0.0, 0.5)]
     out = captions.build_ass(words, tmp_path / "t.ass")
-    assert "{evil}" not in out.read_text()
-    assert "(evil)" in out.read_text()
+    assert "{EVIL}" not in out.read_text()
+    assert "(EVIL)" in out.read_text()
 
 
 def test_build_command_structure(tmp_path):

@@ -82,7 +82,7 @@ def _expand_photo_cuts(scene_list, seg_ends, photo_map):
         imgs = photo_map.get(i) or []
         n = min(len(imgs), max(1, int(seg_dur / MIN_SUBCUT_SECONDS))) if imgs else 1
         for k in range(n):
-            specs.append((sc, imgs[k] if imgs else None))
+            specs.append((sc, imgs[k] if imgs else None, k == 0))
             ends.append(prev + seg_dur * (k + 1) / n)
             emojis.append(sc.get("emoji", "") if k == 0 else "")
         prev = seg_end
@@ -101,13 +101,17 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
             photo_map = images.resolve_for_script(cfg, script)  # never raises
             seg_ends = _segment_ends(script, words)
             specs, ends, emojis = _expand_photo_cuts(scene_list, seg_ends, photo_map)
-            pngs = []
-            for i, (sc, img) in enumerate(specs):
+            pngs, motions = [], []
+            for i, (sc, img, seg_start) in enumerate(specs):
                 pngs.append(scenes_mod.render_scene(sc, theme, seed + i, workdir / f"scene_{i}.png",
                                                     image_path=img))
+                # photos get documentary pans on alternating cuts; drawn scenes punch.
+                # a white flash marks every new beat after the hook.
+                motions.append(("pan" if (img and i % 2 == 1) else "punch",
+                                bool(seg_start and i > 0)))
             return render_mod.render_story(wav, words, pngs, ends, out_mp4,
                                            theme=theme, workdir=workdir,
-                                           segment_emojis=emojis,
+                                           segment_emojis=emojis, motions=motions,
                                            sfx_dir=(cfg.data_dir / "sfx") if cfg.sfx else None,
                                            **hook_kwargs)
         except Exception as e:
