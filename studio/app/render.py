@@ -93,8 +93,9 @@ def build_story_command(scene_durs: list[tuple[Path, float]], voice_wav: Path,
     for j, (png, t0, t1) in enumerate(emoji_overlays):
         idx = n + 1 + j  # scene inputs, then voice, then emojis
         chains.append(f"[{idx}:v]format=rgba[em{j}]")
-        # settles at y=1185 (below the caption band, above lower-third labels)
-        y = (f"1185+8*sin(3*(t-{t0:.3f}))-90*exp(-9*(t-{t0:.3f}))")
+        # settles at y=1080: below the caption band, clear of the photo text
+        # block whose headline starts ~y=1272 (every scene carries a photo now)
+        y = (f"1080+8*sin(3*(t-{t0:.3f}))-90*exp(-9*(t-{t0:.3f}))")
         chains.append(f"[{prev}][em{j}]overlay=x='(W-w)/2':y='{y}'"
                       f":enable='between(t,{t0:.3f},{t1:.3f})'[bg{j + 1}]")
         prev = f"bg{j + 1}"
@@ -181,7 +182,7 @@ def render_story(voice_wav: Path, words: list[Word], scene_files: list[Path],
         for i, dur in enumerate(durs):
             emoji = segment_emojis[i] if i < len(segment_emojis) else ""
             if emoji.strip():
-                png = scenes_mod.emoji_png(emoji, 190, workdir / f"emoji_{i}.png")
+                png = scenes_mod.emoji_png(emoji, 170, workdir / f"emoji_{i}.png")
                 if png is not None:
                     overlays.append((png, start + 0.10, start + dur - 0.08))
             start += dur

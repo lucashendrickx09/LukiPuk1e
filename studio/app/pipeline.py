@@ -61,19 +61,33 @@ def _aligned_scenes(script) -> list[dict]:
     while len(out) < need:
         out.append(dict(empty))
     # the hook card owns the top of the screen while scene 1 plays — any scene
-    # kind that puts content up there would collide, so the opener is always ambient
+    # kind that puts content up there would collide, so the opener is always
+    # ambient. Its photo still shows: the full-bleed style darkens the hook zone.
     out[0]["kind"] = "ambient"
-    out[0]["image_query"] = ""
     return out
 
 
 MIN_SUBCUT_SECONDS = 0.9  # a photo cut shorter than this reads as a glitch
 
 
+def _chunk_even(items: list, n: int) -> list[list]:
+    """Split items into n contiguous near-even groups (early groups get extras)."""
+    base, rem = divmod(len(items), n)
+    out, start = [], 0
+    for k in range(n):
+        size = base + (1 if k < rem else 0)
+        out.append(items[start:start + size])
+        start += size
+    return out
+
+
 def _expand_photo_cuts(scene_list, seg_ends, photo_map):
     """Photos tell the story: a scene with N photos becomes N visual cuts inside
-    its segment. Returns (render_specs, expanded_ends, expanded_emojis) where
-    each spec is (scene, image_path|None). The emoji pops once per scene."""
+    its segment — and when the segment is too short to cut, the photos merge
+    into one collage slide instead of being dropped, so every slide keeps its
+    real pictures. Returns (render_specs, expanded_ends, expanded_emojis) where
+    each spec is (scene, image, is_segment_start) and image is None, a path, or
+    a list of paths (collage). The emoji pops once per scene."""
     specs, ends, emojis = [], [], []
     prev = 0.0
     for i, sc in enumerate(scene_list):
@@ -81,9 +95,18 @@ def _expand_photo_cuts(scene_list, seg_ends, photo_map):
         seg_dur = max(0.01, seg_end - prev)
         imgs = photo_map.get(i) or []
         n = min(len(imgs), max(1, int(seg_dur / MIN_SUBCUT_SECONDS))) if imgs else 1
-        for k in range(n):
-            specs.append((sc, imgs[k] if imgs else None, k == 0))
-            ends.append(prev + seg_dur * (k + 1) / n)
+        if imgs and i == 0:
+            groups = [[p] for p in imgs[:n]]  # hook card sits on top: never collage under it
+        elif imgs:
+            groups = _chunk_even(imgs, n)
+        else:
+            groups = [None]
+        for k, group in enumerate(groups):
+            img = None
+            if group:
+                img = group[0] if len(group) == 1 else group
+            specs.append((sc, img, k == 0))
+            ends.append(prev + seg_dur * (k + 1) / len(groups))
             emojis.append(sc.get("emoji", "") if k == 0 else "")
         prev = seg_end
     ends[-1] = seg_ends[-1]
@@ -288,16 +311,19 @@ def sample_video(cfg, ledger, channel, out: Path | None = None) -> Path:
         pin_comment="Would you bet everything on one store at 44?",
         scenes=[
             {"kind": "ambient", "headline": "", "sub": "", "value": "", "label": "",
-             "points": [], "emoji": "🤯"},
+             "points": [], "emoji": "🤯", "image_query": "Sam Walton"},
             {"kind": "timeline", "headline": "", "sub": "1945 Ben Franklin store;1962 Walmart #1;1970 IPO",
-             "value": "", "label": "", "points": [], "emoji": "🏪"},
+             "value": "", "label": "", "points": [], "emoji": "🏪",
+             "image_query": "1960s American discount store;Rogers Arkansas"},
             {"kind": "big_stat", "headline": "", "sub": "", "value": "-3%",
-             "label": "priced below every competitor", "points": [], "emoji": "🏷️"},
+             "label": "priced below every competitor", "points": [], "emoji": "🏷️",
+             "image_query": "vintage price tag;1960s supermarket shelves"},
             {"kind": "chart_up", "headline": "Walmart stores", "sub": "",
              "value": "", "label": "1962 to 1985", "points": [1, 24, 125, 276, 640, 882],
-             "emoji": "📈"},
+             "emoji": "📈", "image_query": "Walmart storefront"},
             {"kind": "figure", "headline": "Sam Walton", "sub": "", "value": "$2.8B",
-             "label": "net worth, 1985", "points": [], "emoji": "👑💰"},
+             "label": "net worth, 1985", "points": [], "emoji": "👑💰",
+             "image_query": "Sam Walton"},
         ],
     )
     engine = voice_mod.MockEngine()

@@ -109,13 +109,17 @@ def search_openverse(query: str, limit: int = 8) -> list[dict]:
 
 
 def candidates_for(query: str) -> list[dict]:
-    """Commons first (best for notable people/places), Openverse to fill gaps."""
-    out = []
+    """Commons first (best for notable people/places), Openverse to fill gaps.
+    Raises when every source errors — a network failure must not be mistaken for
+    'no such image exists' (ensure() would cache that miss permanently)."""
+    out, errors = [], []
     for source in (search, search_openverse):
         try:
             out.extend(source(query))
-        except Exception:
-            continue
+        except Exception as e:
+            errors.append(e)
+    if not out and len(errors) == 2:
+        raise errors[0]
     return out
 
 
@@ -160,17 +164,37 @@ def ensure(cache_dir: str | Path, query: str) -> tuple[Path | None, str | None]:
     return None, None
 
 
+_QUERY_WORD = re.compile(r"[A-Za-z][A-Za-z'\-]+")
+
+
+def fallback_query(scene: dict, script) -> str:
+    """Best-effort search for a scene that arrived without an image_query —
+    every slide must carry a real photo, so derive one from what's on the slide
+    (or, for text-free scenes like the hook, from the story's title)."""
+    for field in ("headline", "label", "sub"):
+        words = _QUERY_WORD.findall(scene.get(field) or "")
+        if any(len(w) > 3 for w in words):
+            return " ".join(words[:6])
+    title_words = [w for w in _QUERY_WORD.findall(getattr(script, "title", "") or "")
+                   if len(w) > 3]
+    return " ".join(title_words[:5])
+
+
 def resolve_for_script(cfg, script) -> dict[int, list[str]]:
-    """Fetch images for every scene. image_query holds 1-3 searches separated by
-    ';' — each becomes its own visual cut inside the scene's segment. Returns
-    {scene_index: [paths]} and records credits on the script (they end up in the
-    video description)."""
+    """Fetch images so EVERY scene carries at least one real photo. image_query
+    holds 1-3 searches separated by ';' — each becomes its own visual cut inside
+    the scene's segment (or one collage when the segment is short). A scene
+    without a query gets one derived from its own text; a scene whose searches
+    all miss borrows the nearest scene's photo — a related image from the same
+    story beats a photo-less slide. Returns {scene_index: [paths]} and records
+    credits on the script (they end up in the video description)."""
     paths: dict[int, list[str]] = {}
     credits = list(getattr(script, "image_credits", []) or [])
-    for i, scene in enumerate(script.scenes or []):
-        if not isinstance(scene, dict) or i == 0:  # the hook scene stays ambient
-            continue
+    scene_items = [(i, s) for i, s in enumerate(script.scenes or []) if isinstance(s, dict)]
+    for i, scene in scene_items:
         queries = [q.strip() for q in (scene.get("image_query") or "").split(";") if q.strip()][:3]
+        if not queries:
+            queries = [q for q in [fallback_query(scene, script)] if q]
         found: list[str] = []
         for query in queries:
             path, credit = ensure(cfg.data_dir / "images", query)
@@ -180,5 +204,10 @@ def resolve_for_script(cfg, script) -> dict[int, list[str]]:
                     credits.append(credit)
         if found:
             paths[i] = found
+    if paths:  # the borrow backstop for scenes whose searches all missed
+        for i, scene in scene_items:
+            if i not in paths:
+                nearest = min(paths, key=lambda j: abs(j - i))
+                paths[i] = [paths[nearest][0]]
     script.image_credits = credits
     return paths

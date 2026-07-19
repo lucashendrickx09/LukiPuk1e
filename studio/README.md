@@ -86,13 +86,20 @@ YouTube's free **API audit** are locked private. Two ways to run:
 ### What every render includes
 
 - **Animated story scenes** (`visual_style: scenes`) — Claude storyboards every
-  script: one scene per segment, drawn natively (no stock footage, no image
-  rights) and animated with slow zoom + hard cuts on beat boundaries. Scene kinds:
+  script: one scene per segment, drawn natively (no stock footage) and animated
+  with slow zoom + hard cuts on beat boundaries. Scene kinds:
   `big_stat` (a huge number), `chart_up` (rising line chart), `timeline`
   (milestones), `figure` (stylized person card — name + their number, perfect for
   "how X got rich" stories), `quote`, `list_reveal`, `title_card`, `ambient`.
   Numbers on screen match numbers being spoken. Set `visual_style: gradient` for
   the plain look; any scene failure auto-falls back to it.
+- **A real photo on every scene** — each slide carries at least one licensed
+  archival image (Wikimedia Commons/Openverse, PD/CC-BY/CC-BY-SA only, credits
+  auto-appended to the description): a full-bleed backdrop (including under the
+  hook card), a framed tilted photo-card, or a 2-3-photo collage when a segment
+  is too short to hard-cut between its images. Scenes without a usable query
+  derive one from their own text, and a scene whose searches miss borrows the
+  nearest scene's photo. Offline, everything degrades to the drawn style.
 - **Hook card at frame 0** — the hook text sits at the top of the screen from the
   first frame until the spoken hook ends. The seed-audience swipe decision happens
   in the first second; the promise must be readable before a word is spoken.

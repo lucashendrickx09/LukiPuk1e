@@ -401,17 +401,13 @@ def _figure(im, d, scene, theme, rng):
         _draw_block(d, label, cx, SECONDARY_Y + 80, _font(52), (235, 235, 235), CONTENT_W - 120)
 
 
-def _photo_scene(im, d, scene, theme, rng, image_path):
-    """A real archival photo as a tilted, framed card in the upper zone, with the
-    scene's text stacked in the lower third (clear of hook card and captions)."""
-    accent = _rgb(theme["accent"])
+def _photo_card(image_path, box_w: int, box_h: int, accent, angle: float) -> Image.Image | None:
+    """A framed, tilted photo-card: graded photo, warm-white frame, accent
+    outline, rounded corners. None if the image can't be read."""
     try:
-        photo = Image.open(image_path).convert("RGB")
+        photo = _grade_photo(Image.open(image_path).convert("RGB"))
     except Exception:
-        return _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
-
-    photo = _grade_photo(photo)
-    box_w, box_h = 940, 850
+        return None
     scale = max(box_w / photo.width, box_h / photo.height)
     photo = photo.resize((int(photo.width * scale) + 1, int(photo.height * scale) + 1), Image.LANCZOS)
     left = (photo.width - box_w) // 2
@@ -426,32 +422,54 @@ def _photo_scene(im, d, scene, theme, rng, image_path):
     cd = ImageDraw.Draw(card)
     cd.rounded_rectangle([0, 0, card.width - 1, card.height - 1], radius=34,
                          outline=(*accent, 255), width=5)
-    card = card.rotate(rng.uniform(-3.2, 3.2), expand=True, resample=Image.BICUBIC)
+    return card.rotate(angle, expand=True, resample=Image.BICUBIC)
 
+
+def _place_card(im, card, cx: int, cy: int) -> None:
+    """Drop-shadow + paste a card centered at (cx, cy)."""
     shadow = Image.new("RGBA", im.size, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shadow)
-    cx, cy = SCENE_W // 2, 590
-    sd.rounded_rectangle([cx - card.width // 2 + 14, cy - card.height // 2 + 20,
-                          cx + card.width // 2 + 14, cy + card.height // 2 + 20],
-                         radius=40, fill=(0, 0, 0, 110))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(22))
-    im.alpha_composite(shadow)
+    ImageDraw.Draw(shadow).rounded_rectangle(
+        [cx - card.width // 2 + 14, cy - card.height // 2 + 20,
+         cx + card.width // 2 + 14, cy + card.height // 2 + 20],
+        radius=40, fill=(0, 0, 0, 110))
+    im.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(22)))
     im.paste(card, (cx - card.width // 2, cy - card.height // 2), card)
 
-    d = ImageDraw.Draw(im, "RGBA")
-    y = SECONDARY_Y - 190
-    head = scene.get("headline") or ""
-    if head:
-        f = _fit(d, head, CONTENT_W, 96, max_lines=2)
-        y = _draw_block(d, head, SCENE_W // 2, y, f, (255, 255, 255), CONTENT_W) + 8
-    value = scene.get("value") or ""
-    if value:
-        f = _fit(d, value, CONTENT_W, 150, min_size=70, max_lines=1)
-        d.text((SCENE_W // 2, y + f.size // 2), value, font=f, fill=(*accent, 255), anchor="mm")
-        y += int(f.size * 1.25)
-    label = scene.get("label") or scene.get("sub") or ""
-    if label:
-        _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
+
+def _photo_scene(im, d, scene, theme, rng, image_path):
+    """A real archival photo as a tilted, framed card in the upper zone, with the
+    scene's text stacked in the lower third (clear of hook card and captions)."""
+    accent = _rgb(theme["accent"])
+    card = _photo_card(image_path, 940, 850, accent, rng.uniform(-3.2, 3.2))
+    if card is None:
+        return _DISPATCH.get(scene.get("kind", "ambient"), _ambient)(im, d, scene, theme, rng)
+    _place_card(im, card, SCENE_W // 2, 590)
+    _photo_text_block(im, scene, theme)
+
+
+# collage geometry: (offset from collage center, card box, base tilt) per slot
+_COLLAGE_LAYOUTS = {
+    2: [((-235, -115), (640, 690), -5.2), ((240, 130), (640, 690), 4.4)],
+    3: [((5, -240), (620, 540), -3.2), ((-275, 155), (600, 610), 5.4),
+        ((280, 185), (600, 610), -4.6)],
+}
+
+
+def _photo_collage(im, scene, theme, rng, image_paths) -> bool:
+    """2-3 real photos as overlapping tilted cards — one slide that reads as a
+    story spread. Used when a segment carries several photos but is too short
+    to hard-cut between them. Returns False if no photo could be read."""
+    accent = _rgb(theme["accent"])
+    layout = _COLLAGE_LAYOUTS[2 if len(image_paths) < 3 else 3]
+    cx, cy = SCENE_W // 2, 580
+    placed = 0
+    for path, ((dx, dy), (bw, bh), angle) in zip(image_paths, layout):
+        card = _photo_card(path, bw, bh, accent, angle + rng.uniform(-1.4, 1.4))
+        if card is None:
+            continue
+        _place_card(im, card, cx + dx, cy + dy)
+        placed += 1
+    return placed > 0
 
 
 def _photo_text_block(im, scene, theme):
@@ -470,6 +488,9 @@ def _photo_text_block(im, scene, theme):
         y += int(f.size * 1.25)
     label = scene.get("label") or scene.get("sub") or ""
     if label:
+        # timeline/list scenes keep ';'-separated items in sub — print them
+        # as a dotted line, not raw semicolons
+        label = " · ".join(p.strip() for p in label.split(";") if p.strip())
         _draw_block(d, label, SCENE_W // 2, y + 10, _font(52), (225, 225, 225), CONTENT_W - 100)
 
 
@@ -517,29 +538,42 @@ _DISPATCH = {
 
 
 def render_scene(scene: dict, theme: dict, seed: int, out_png: str | Path,
-                 image_path: str | Path | None = None,
+                 image_path: str | Path | list | None = None,
                  image_style: str = "auto") -> Path:
     """Draw one scene card to PNG (1350x2400).
 
-    With an image: 'card' = framed tilted photo-card (portraits/figure scenes),
-    'full' = full-bleed graded photo (story beats), 'auto' picks by scene kind.
-    Without an image (or if it fails to load): the drawn Starfield Noir styles.
+    image_path is a single path or a list. One image: 'card' = framed tilted
+    photo-card (portraits/figure scenes), 'full' = full-bleed graded photo
+    (story beats), 'auto' picks by scene kind. Two or three images: an
+    overlapping collage on the brand background. Without a readable image:
+    the drawn Starfield Noir styles.
     """
     out_png = Path(out_png)
     rng = random.Random(seed)
-    if image_path and Path(image_path).exists():
+    paths = list(image_path) if isinstance(image_path, (list, tuple)) else [image_path]
+    paths = [p for p in paths if p and Path(p).exists()]
+    if len(paths) >= 2:
+        try:
+            im = _background(theme, seed)
+            if _photo_collage(im, scene, theme, rng, paths[:3]):
+                _photo_text_block(im, scene, theme)
+                im.convert("RGB").save(out_png, "PNG")
+                return out_png
+        except Exception:
+            pass  # unreadable images -> single/drawn styles below
+    if paths:
         style = image_style
         if style == "auto":
             style = "card" if scene.get("kind") == "figure" else "full"
         try:
             if style == "full":
-                im = _photo_full(scene, theme, rng, image_path)
+                im = _photo_full(scene, theme, rng, paths[0])
                 _photo_text_block(im, scene, theme)
                 im.convert("RGB").save(out_png, "PNG")
                 return out_png
             im = _background(theme, seed)
             d = ImageDraw.Draw(im, "RGBA")
-            _photo_scene(im, d, scene, theme, rng, image_path)
+            _photo_scene(im, d, scene, theme, rng, paths[0])
             im.convert("RGB").save(out_png, "PNG")
             return out_png
         except Exception:
