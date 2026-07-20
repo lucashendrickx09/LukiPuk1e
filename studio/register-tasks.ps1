@@ -14,6 +14,14 @@ param([switch]$Remove)
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
+$isAdmin = ([Security.Principal.WindowsPrincipal] `
+    [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltinRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "Note: if this fails with 'Access is denied', re-run in an Administrator PowerShell" -ForegroundColor Yellow
+    Write-Host "      (Start menu > type 'powershell' > right-click > Run as administrator)." -ForegroundColor Yellow
+}
+
 $runName = "ShortsStudio-Run"
 $pubName = "ShortsStudio-Publish"
 

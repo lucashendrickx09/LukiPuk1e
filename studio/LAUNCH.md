@@ -21,18 +21,21 @@ winget install Git.Git
 git clone https://github.com/lucashendrickx09/LukiPuk1e.git
 cd LukiPuk1e; git checkout claude/short-form-video-creator-d02uf9
 cd studio
-.\setup.bat                            # venv + deps + .env template + doctor
+.\setup.bat                            # venv + deps + doctor, and PASTES YOUR KEY FOR YOU
 ```
+
+`setup.bat` asks you to paste your `ANTHROPIC_API_KEY` (input hidden) and writes
+it into `.env` itself — no Notepad needed. Get the key at console.anthropic.com →
+API keys; use a **fresh** key with a low spend limit for now. It also offers to
+render a preview at the end.
 
 > macOS/Linux: `bash setup.sh` instead of `.\setup.bat` (installs ffmpeg hint per OS).
 
-- [ ] Edit `.env`: add your `ANTHROPIC_API_KEY` (console.anthropic.com → API keys).
-      Use a **fresh** key with a low spend limit for now.
 - [ ] `.\.venv\Scripts\python.exe run.py doctor` — everything except channel auth
       should be green (emoji font is built into Windows, so it passes automatically)
-- [ ] `.\.venv\Scripts\python.exe run.py sample` — first render on your machine.
-      **Note:** the first run with Kokoro downloads ~330MB of model weights from
-      HuggingFace (one time).
+- [ ] `.\.venv\Scripts\python.exe run.py sample` — first render on your machine
+      (or just say **y** when setup offers it). **Note:** the first run with Kokoro
+      downloads ~330MB of model weights from HuggingFace (one time).
 - [ ] Watch both samples in `data\renders\`. Check on your **phone** — colors and
       caption sizes read differently there. Tweaks live in `config.yaml`
       (`theme`, `voice`, `voice_rate`).

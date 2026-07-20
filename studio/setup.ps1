@@ -8,7 +8,18 @@
 param([switch]$Lite)
 
 $ErrorActionPreference = "Stop"
+# On PowerShell 7.4+ a non-zero exit from a native command (e.g. `run.py doctor`,
+# which exits 1 until YouTube auth is set up) would otherwise abort the script.
+# We handle those exits explicitly, so opt out of that behavior where it exists.
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 Set-Location -Path $PSScriptRoot
+
+# Refresh PATH from the registry so tools you just installed via winget in THIS
+# same window (python/ffmpeg/git) are found without reopening the terminal.
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path", "User")
 
 Write-Host "==> Shorts Studio setup (Windows)" -ForegroundColor Green
 
@@ -56,15 +67,48 @@ if (-not $Lite) {
     }
 }
 
-# --- .env + secrets -------------------------------------------------------
-if (-not (Test-Path ".env")) {
-    Copy-Item ".env.example" ".env"
-    Write-Host "==> created .env — EDIT IT and add your ANTHROPIC_API_KEY" -ForegroundColor Cyan
+# --- .env + API key (no Notepad needed) -----------------------------------
+$envPath = Join-Path $PSScriptRoot ".env"
+if (-not (Test-Path $envPath)) {
+    Copy-Item ".env.example" $envPath
+    Write-Host "==> created .env"
+}
+# does .env already hold a real key, or just the placeholder?
+$keyLine = (Get-Content $envPath | Where-Object { $_ -match '^\s*ANTHROPIC_API_KEY\s*=' } | Select-Object -First 1)
+$keyVal = if ($keyLine) { ($keyLine -replace '^\s*ANTHROPIC_API_KEY\s*=\s*', '').Trim() } else { "" }
+if ((-not $keyVal) -or ($keyVal -eq 'sk-ant-...')) {
+    Write-Host ""
+    Write-Host "Paste your Anthropic API key (input is hidden). Get one at console.anthropic.com > API keys." -ForegroundColor Cyan
+    Write-Host "You can press Enter to skip and add it to .env later." -ForegroundColor DarkGray
+    $secure = Read-Host "ANTHROPIC_API_KEY" -AsSecureString
+    $key = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)).Trim()
+    if ($key) {
+        $content = Get-Content $envPath
+        if ($content -match '^\s*ANTHROPIC_API_KEY\s*=') {
+            $content = $content -replace '^\s*ANTHROPIC_API_KEY\s*=.*', "ANTHROPIC_API_KEY=$key"
+        } else {
+            $content += "ANTHROPIC_API_KEY=$key"
+        }
+        Set-Content -Path $envPath -Value $content -Encoding ascii  # no BOM; key is ASCII
+        Write-Host "==> saved your key to .env (this file is gitignored — it never gets committed)" -ForegroundColor Green
+    } else {
+        Write-Host "==> no key entered — edit .env and set ANTHROPIC_API_KEY before running research/produce" -ForegroundColor Yellow
+    }
 }
 if (-not (Test-Path "secrets")) { New-Item -ItemType Directory -Path "secrets" | Out-Null }
 
 Write-Host ""
 & $venvPy run.py doctor
+Write-Host ""
+
+# --- offer a first render -------------------------------------------------
+$ans = Read-Host "Render a free style-preview video now? (y/N)"
+if ($ans -match '^(y|yes)$') {
+    & $venvPy run.py sample
+    Write-Host "Done — open the studio\data\renders\ folder to watch it." -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "Next: read LAUNCH.md (the Windows track) — the step-by-step launch runbook."
 Write-Host "Tip: activate the venv in new windows with:  .venv\Scripts\Activate.ps1"
