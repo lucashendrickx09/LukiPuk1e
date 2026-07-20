@@ -32,8 +32,13 @@ pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 
 if [[ "${1:-}" != "--lite" ]]; then
-  echo "==> installing local voice (Kokoro TTS — first run also downloads ~330MB of model weights)"
-  pip install --quiet -r requirements-voice.txt || {
+  echo "==> installing local voice (Kokoro TTS — CPU PyTorch ~200MB; first run also downloads ~330MB of model weights)"
+  # On Linux the default torch wheel is the ~2.5GB CUDA build; force the CPU build
+  # (we run on CPU). macOS torch is already CPU-only, so leave it to the default index.
+  if [[ "$(uname)" == "Linux" ]]; then
+    pip install torch --index-url https://download.pytorch.org/whl/cpu || true
+  fi
+  pip install -r requirements-voice.txt || {
     echo "!! voice install failed — you can retry later with: pip install -r requirements-voice.txt"
   }
 fi

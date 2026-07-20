@@ -54,14 +54,20 @@ if (-not (Test-Path $venvPy)) {
     exit 1
 }
 
-Write-Host "==> installing core dependencies"
-& $venvPy -m pip install --quiet --upgrade pip
-& $venvPy -m pip install --quiet -r requirements.txt
+Write-Host "==> installing core dependencies (progress shows below)"
+& $venvPy -m pip install --upgrade pip
+& $venvPy -m pip install -r requirements.txt
 
 if (-not $Lite) {
-    Write-Host "==> installing local voice (Kokoro TTS — first run also downloads ~330MB of model weights)"
+    Write-Host "==> installing local voice (Kokoro TTS)" -ForegroundColor Cyan
+    Write-Host "    This downloads PyTorch. We install the CPU build (~200MB) on purpose —"
+    Write-Host "    the default Windows wheel is the ~2.5GB CUDA build we don't need."
+    Write-Host "    A few minutes with a slow-moving bar is normal. Let it run."
     try {
-        & $venvPy -m pip install --quiet -r requirements-voice.txt
+        # CPU-only torch first, so kokoro's torch dependency is already satisfied and
+        # pip never pulls the giant CUDA wheel. We render/voice on CPU either way.
+        & $venvPy -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+        & $venvPy -m pip install -r requirements-voice.txt
     } catch {
         Write-Host "!! voice install failed — retry later with:  .venv\Scripts\python -m pip install -r requirements-voice.txt" -ForegroundColor Yellow
     }
