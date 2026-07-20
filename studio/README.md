@@ -36,15 +36,31 @@ all local and free.
 
 ## Quick start (10 minutes, zero YouTube setup needed)
 
+**Windows** (one command does venv + deps + `.env` + doctor):
+```powershell
+cd studio
+.\setup.bat                              # or:  .\setup.bat --lite  (skip the Kokoro download)
+.\.venv\Scripts\python.exe run.py sample # renders a free style preview per channel
+```
+
+**macOS / Linux:**
 ```bash
 cd studio
-python3 -m venv .venv && source .venv/bin/activate
+bash setup.sh                            # or the manual steps below
+python run.py sample
+```
+
+<details><summary>Manual steps (any OS)</summary>
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt          # research + upload deps
 pip install -r requirements-voice.txt    # local TTS (Kokoro) — recommended
-cp .env.example .env                     # add your ANTHROPIC_API_KEY
+cp .env.example .env                     # add your ANTHROPIC_API_KEY (Windows: copy)
 python run.py doctor                     # see what's ready
 python run.py sample                     # renders a free style preview per channel
 ```
+</details>
 
 `sample` uses the mock voice and no APIs — you can see each channel's look immediately
 in `data/renders/`.
@@ -117,9 +133,11 @@ YouTube's free **API audit** are locked private. Two ways to run:
   config). Pure ffmpeg synthesis: no sample packs, no licenses.
 - **Retention progress bar** along the bottom edge.
 
-**New machine? `bash setup.sh` then follow [`LAUNCH.md`](LAUNCH.md)** — the
-step-by-step runbook from clean laptop to autopilot. The growth strategy lives in
-[`METHOD.md`](METHOD.md) (the 100K method) and the identities in [`BRAND.md`](BRAND.md).
+**New machine? `.\setup.bat` (Windows) or `bash setup.sh` (macOS/Linux), then
+follow [`LAUNCH.md`](LAUNCH.md)** — the step-by-step runbook from clean PC to
+autopilot (written for Windows, with macOS/Linux callouts). The growth strategy
+lives in [`METHOD.md`](METHOD.md) (the 100K method) and the identities in
+[`BRAND.md`](BRAND.md).
 
 ## Mission control (the website)
 
@@ -162,19 +180,26 @@ what *your* audience retains get scored up; 20 % of slots still go to exploratio
 python run.py run         # research -> produce -> publish approved -> analyze, all channels
 ```
 
-Cron it (laptop/server/Raspberry Pi — everything runs on CPU):
+Schedule it (everything runs on CPU):
 
+**Windows** — one command registers it in Task Scheduler:
+```powershell
+.\register-tasks.ps1     # 09:30 run + 13:00/20:00 publish; remove with -Remove
+```
+
+**macOS / Linux** — cron:
 ```cron
 30 9 * * *   cd /path/to/studio && .venv/bin/python run.py run >> data/run.log 2>&1
 0 13,20 * * * cd /path/to/studio && .venv/bin/python run.py publish >> data/run.log 2>&1
 ```
 
-The second line re-runs `publish` near the posting slots so the live-sweep can post
-each video's engagement comment shortly after it goes public.
+The publish job re-runs near the posting slots so the live-sweep can post each
+video's engagement comment shortly after it goes public.
 
-**On a Mac:** cron only fires while the machine is awake. Either keep the lid open
-on power, schedule a wake (System Settings → Energy → scheduled wake, or
-`sudo pmset repeat wakeorpoweron MTWRFSU 09:25:00`), or run the daily loop manually —
+**The machine must be awake at trigger time.** Windows Task Scheduler catches up a
+missed run on next wake (`StartWhenAvailable`); to avoid sleep, set Power → sleep →
+Never while plugged in. On a Mac, keep the lid open on power or schedule a wake
+(`sudo pmset repeat wakeorpoweron MTWRFSU 09:25:00`). Or just run the loop manually —
 it's one command.
 
 With `review.required: true` (default), the cron run produces + schedules but the

@@ -3,25 +3,42 @@
 Everything is built and tested. This is the exact sequence for launch day and the
 first month. Nothing here requires decisions — just execution. Check items off.
 
+> **OS note:** this runbook is written for **Windows** (your PC). Commands assume
+> PowerShell in the `studio\` folder. macOS/Linux equivalents are in the callouts
+> and in `setup.sh` / the cron block at the bottom. Everything else is identical.
+
 ---
 
 ## Phase 0 — first hour at the computer
 
-```bash
+Install prerequisites (once), then clone and set up:
+
+```powershell
+winget install Python.Python.3.12      # tick "Add to PATH" if using the installer
+winget install Gyan.FFmpeg             # then close+reopen the terminal so PATH refreshes
+winget install Git.Git
+
 git clone https://github.com/lucashendrickx09/LukiPuk1e.git
-cd LukiPuk1e && git checkout claude/short-form-video-creator-d02uf9
+cd LukiPuk1e; git checkout claude/short-form-video-creator-d02uf9
 cd studio
-bash setup.sh                # venv + deps + .env template + doctor
+.\setup.bat                            # venv + deps + .env template + doctor
 ```
 
-- [ ] Edit `.env`: add your `ANTHROPIC_API_KEY` (console.anthropic.com → API keys)
-- [ ] `source .venv/bin/activate && python run.py doctor` — everything except
-      channel auth should be green
-- [ ] `python run.py sample` — first render on your machine. **Note:** the first
-      run with Kokoro downloads ~330MB of model weights from HuggingFace (one time).
-- [ ] Watch both samples in `data/renders/`. Check on your **phone** — colors and
+> macOS/Linux: `bash setup.sh` instead of `.\setup.bat` (installs ffmpeg hint per OS).
+
+- [ ] Edit `.env`: add your `ANTHROPIC_API_KEY` (console.anthropic.com → API keys).
+      Use a **fresh** key with a low spend limit for now.
+- [ ] `.\.venv\Scripts\python.exe run.py doctor` — everything except channel auth
+      should be green (emoji font is built into Windows, so it passes automatically)
+- [ ] `.\.venv\Scripts\python.exe run.py sample` — first render on your machine.
+      **Note:** the first run with Kokoro downloads ~330MB of model weights from
+      HuggingFace (one time).
+- [ ] Watch both samples in `data\renders\`. Check on your **phone** — colors and
       caption sizes read differently there. Tweaks live in `config.yaml`
       (`theme`, `voice`, `voice_rate`).
+
+> Tip: activate the venv once per window with `.\.venv\Scripts\Activate.ps1`, then
+> you can type `python run.py ...` directly instead of the full venv path.
 
 Voice options if the defaults don't fit the brand: `af_heart`, `af_bella`,
 `af_nicole` (US female), `am_michael`, `am_adam`, `am_onyx` (US male),
@@ -88,12 +105,21 @@ seed-audience test is the game until the algorithm trusts the channels.
 
 ## Phase 4 — automation (week 2–3)
 
-- [ ] Cron the daily loop (Mac: System Settings → Energy → schedule wake, or
-      keep the lid open on power):
-```cron
-30 9 * * *    cd ~/LukiPuk1e/studio && .venv/bin/python run.py run >> data/run.log 2>&1
-0 13,20 * * * cd ~/LukiPuk1e/studio && .venv/bin/python run.py publish >> data/run.log 2>&1
+- [ ] Register the daily loop in **Windows Task Scheduler** (one command):
+```powershell
+.\register-tasks.ps1        # creates ShortsStudio-Run (09:30) + ShortsStudio-Publish (13:00, 20:00)
 ```
+  This is the cron equivalent. Remove later with `.\register-tasks.ps1 -Remove`.
+  The PC must be on/awake at those times; a missed run catches up on next wake.
+  To keep the machine from sleeping mid-run: Settings → System → Power → Screen
+  and sleep → "When plugged in, put device to sleep" → Never.
+
+> macOS/Linux cron instead:
+> ```cron
+> 30 9 * * *    cd ~/LukiPuk1e/studio && .venv/bin/python run.py run >> data/run.log 2>&1
+> 0 13,20 * * * cd ~/LukiPuk1e/studio && .venv/bin/python run.py publish >> data/run.log 2>&1
+> ```
+
 - [ ] Your only daily touch is now `run.py review` (~5 min)
 - [ ] When the audit clears: nothing to change — scheduled videos go public on
       their own from then on
@@ -123,7 +149,10 @@ seed-audience test is the game until the algorithm trusts the channels.
 | Upload succeeds but video stuck private after publish time | API audit not approved yet — flip in Studio; keep the audit ticket warm |
 | Comment posting fails with 403 | Re-run `python run.py auth <channel>` — the token predates the force-ssl scope |
 | Research returns nothing | Check `ANTHROPIC_API_KEY` in `.env`; seeds keep production alive meanwhile |
-| Emojis missing from videos | Install a color emoji font: `apt install fonts-noto-color-emoji` (macOS has one built in) |
+| Emojis missing from videos | Windows & macOS have a color emoji font built in (Segoe UI Emoji / Apple Color Emoji). Linux: `apt install fonts-noto-color-emoji` |
+| `setup.bat`: "running scripts is disabled" | It shouldn't happen (the .bat bypasses policy). If running `setup.ps1` directly: `powershell -ExecutionPolicy Bypass -File setup.ps1` |
+| `ffmpeg`/`python` "not recognized" after winget install | Close and reopen the terminal so PATH refreshes; then re-run `.\setup.bat` |
+| Task Scheduler jobs never run | PC was asleep at the trigger time — they catch up on wake; or disable sleep while plugged in (Phase 4) |
 | Videos feel same-y | Raise `formula.epsilon` to 0.3 for a week (more exploration), or add seed topics |
 
 ## What was verified before this runbook was written

@@ -29,13 +29,17 @@ KINDS = ("ambient", "title_card", "big_stat", "chart_up", "timeline",
 
 ASSETS_FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
-# Heavy display face first (bundled with the repo — Apache 2.0), then system fallbacks.
+# Heavy display face first (bundled with the repo — Apache 2.0), then system
+# fallbacks for Linux, macOS, and Windows (C:\Windows\Fonts).
 _FONT_PATHS = [
     str(ASSETS_FONTS / "Roboto-Black.ttf"),
     "/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Black.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "C:/Windows/Fonts/ariblk.ttf",     # Arial Black (Windows)
+    "C:/Windows/Fonts/arialbd.ttf",    # Arial Bold (Windows)
+    "C:/Windows/Fonts/segoeuib.ttf",   # Segoe UI Bold (Windows)
 ]
 _FONT_PATHS_BOLD = [
     str(ASSETS_FONTS / "Roboto-Bold.ttf"),
@@ -45,6 +49,7 @@ _FONT_PATHS_BOLD = [
 _EMOJI_PATHS = [
     "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",   # linux (fonts-noto-color-emoji)
     "/System/Library/Fonts/Apple Color Emoji.ttc",         # macOS
+    "C:/Windows/Fonts/seguiemj.ttf",                       # Windows (Segoe UI Emoji)
 ]
 
 
@@ -79,9 +84,12 @@ def _glow_text(im: Image.Image, xy, text: str, font, fill, anchor="mm",
 
 @lru_cache(maxsize=1)
 def _emoji_font() -> tuple[ImageFont.FreeTypeFont | None, int]:
-    """Color-emoji fonts are bitmap strikes — only specific sizes load."""
+    """Noto/Apple color emoji are bitmap strikes — only specific sizes load.
+    Segoe UI Emoji (Windows) is a scalable COLR font — any size loads, so the
+    big sizes at the front give crisp Windows emoji; they simply fail on the
+    strike fonts and fall through to a real strike."""
     for path in _EMOJI_PATHS:
-        for size in (160, 137, 128, 109, 96, 72, 64, 48, 32):
+        for size in (256, 200, 160, 137, 128, 109, 96, 72, 64, 48, 32):
             try:
                 return ImageFont.truetype(path, size), size
             except OSError:

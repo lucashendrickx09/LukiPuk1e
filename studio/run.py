@@ -64,7 +64,7 @@ def cmd_doctor(args):
         from app import scenes as _scenes
         font, _ = _scenes._emoji_font()
         check("color emoji font", font is not None,
-              "Linux: apt install fonts-noto-color-emoji | macOS: built in — videos render without emoji until then")
+              "Linux: apt install fonts-noto-color-emoji | macOS & Windows: built in (Segoe UI Emoji) — videos render without emoji until then")
         if font is None:
             ok = True  # emoji degrade gracefully; warn, don't fail
     except Exception:
