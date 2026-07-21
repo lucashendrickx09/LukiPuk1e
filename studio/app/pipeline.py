@@ -144,11 +144,15 @@ def _render_final(cfg, channel, script, wav, words, out_mp4, workdir, seed, log=
                              workdir=workdir, **hook_kwargs)
 
 
-def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) -> int | None:
+def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None,
+                  on_progress=None) -> int | None:
     """idea -> script (validated+scored) -> voice -> render -> review queue.
 
     Returns the video id, or None if the idea couldn't clear the quality gate.
+    on_progress(msg) is called at each stage for the UI's progress panel.
     """
+    p = on_progress or (lambda m: None)
+    p("writing the script with AI…")
     script, issues = scriptgen.script_with_retry(cfg, channel, idea, client=client)
     if script is None:
         ledger.set_idea_status(idea["id"], "discarded")
@@ -173,6 +177,7 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
     workdir = cfg.data_dir / "build" / f"{channel.name}_{video_id}_{_slug(script.title)}"
     workdir.mkdir(parents=True, exist_ok=True)
 
+    p("recording the voiceover…")
     engine = engine or voice_mod.pick_engine(cfg.tts_engine)
     wav = workdir / "voice.wav"
     words, _dur = engine.synth(script.spoken_text(), channel.voice, wav)
@@ -181,6 +186,7 @@ def produce_video(cfg, channel, ledger, idea: dict, client=None, engine=None) ->
     out_mp4 = cfg.data_dir / "renders" / f"{channel.name}_{video_id}_{_slug(script.title)}.mp4"
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
     seed = video_id * 7919 + int(time.time()) % 7919
+    p("fetching photos + rendering the video…")
     path, duration = _render_final(cfg, channel, script, wav, words, out_mp4,
                                    workdir, seed, log=ledger.log)
 
@@ -235,11 +241,13 @@ def revoice_all(cfg, channel, ledger, engine=None) -> list[int]:
 
 
 def run_channel(cfg, channel, ledger, count: int | None = None, client=None, engine=None,
-                use_web_search: bool = True) -> list[int]:
+                use_web_search: bool = True, on_progress=None) -> list[int]:
     """Produce up to `count` (default videos_per_day) new videos for one channel."""
+    p = on_progress or (lambda m: None)
     count = count or cfg.videos_per_day
     candidates = ledger.ideas(channel.name, status="candidate")
     if len(candidates) < count * 3:
+        p("finding fresh ideas…")
         ideate.refresh_ideas(cfg, channel, ledger, client=client, use_web_search=use_web_search)
     ideas = ideate.select_ideas(cfg, channel, ledger, k=count * 2)  # headroom for gate discards
     made: list[int] = []
@@ -247,7 +255,8 @@ def run_channel(cfg, channel, ledger, count: int | None = None, client=None, eng
         if len(made) >= count:
             ledger.set_idea_status(idea["id"], "candidate")  # give it back
             continue
-        vid = produce_video(cfg, channel, ledger, idea, client=client, engine=engine)
+        vid = produce_video(cfg, channel, ledger, idea, client=client, engine=engine,
+                            on_progress=on_progress)
         if vid is not None:
             made.append(vid)
     return made

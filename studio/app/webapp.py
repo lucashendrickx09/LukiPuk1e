@@ -421,16 +421,22 @@ def _job_start(kind: str, detail: str, target, *args) -> str:
     job_id = uuid.uuid4().hex[:8]
     with _JOBS_LOCK:
         JOBS[job_id] = {"id": job_id, "kind": kind, "detail": detail,
-                        "status": "running", "started": time.time(), "result": None}
+                        "status": "running", "started": time.time(),
+                        "progress": detail, "result": None}
+
+    def progress(msg: str):
+        with _JOBS_LOCK:
+            if job_id in JOBS:
+                JOBS[job_id]["progress"] = str(msg)
 
     def run():
         try:
-            result = target(*args)
+            result = target(progress, *args)   # every target takes progress as arg 1
             with _JOBS_LOCK:
-                JOBS[job_id].update(status="done", result=str(result)[:500])
+                JOBS[job_id].update(status="done", result=str(result)[:500], progress="")
         except Exception as e:
             with _JOBS_LOCK:
-                JOBS[job_id].update(status="failed", result=str(e)[:500])
+                JOBS[job_id].update(status="failed", result=str(e)[:500], progress="")
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
@@ -570,9 +576,9 @@ def make_handler(cfg, ledger_factory):
                 except KeyError:
                     self._json({"error": "unknown channel"}, 400)
                 else:
-                    def run(ch=ch):
+                    def run(progress, ch=ch):
                         from . import publish as pub
-                        p = pub.auth_channel(ch)
+                        pub.auth_channel(ch)
                         return f"connected {ch.name}"
                     self._json({"job": _job_start("youtube-connect",
                                 f"a Google sign-in window is opening for {ch.name}", run)})
@@ -582,7 +588,8 @@ def make_handler(cfg, ledger_factory):
                 if not info.get("update_available"):
                     self._json({"error": "already up to date"}, 400)
                 else:
-                    def run(url=info["download_url"]):
+                    def run(progress, url=info["download_url"]):
+                        progress("downloading the new version…")
                         version.apply(url)   # downloads, then restarts the app
                         return "downloaded; restarting"
                     self._json({"job": _job_start("update",
@@ -590,11 +597,12 @@ def make_handler(cfg, ledger_factory):
             elif self.path == "/api/refresh":
                 self._json(self._with_ledger(lambda led: refresh(cfg, led)))
             elif self.path == "/api/diagnose":
-                def run():
+                def run(progress):
                     led = ledger_factory()
                     try:
                         names = []
                         for ch in cfg.channels:
+                            progress(f"analyzing {ch.name}…")
                             _, p = diagnose.run_diagnosis(cfg, led, ch)
                             names.append(p.name if p else "?")
                         return ", ".join(names)
@@ -603,10 +611,11 @@ def make_handler(cfg, ledger_factory):
                 self._json({"job": _job_start("diagnose", "Claude deep analysis", run)})
             elif self.path == "/api/action/research":
                 ch = cfg.channel(body.get("channel", ""))
-                def run():
+                def run(progress):
                     from . import ideate
                     led = ledger_factory()
                     try:
+                        progress("asking the AI for fresh ideas…")
                         return f"+{ideate.refresh_ideas(cfg, ch, led)} ideas"
                     finally:
                         led.close()
@@ -614,21 +623,26 @@ def make_handler(cfg, ledger_factory):
             elif self.path == "/api/action/produce":
                 ch = cfg.channel(body.get("channel", ""))
                 count = int(body.get("count", 1))
-                def run():
+                def run(progress):
                     from . import pipeline
                     led = ledger_factory()
                     try:
-                        made = pipeline.run_channel(cfg, ch, led, count=count)
-                        return f"produced {len(made)} video(s): {made}"
+                        made = pipeline.run_channel(cfg, ch, led, count=count,
+                                                   on_progress=progress)
+                        if made:
+                            return f"produced {len(made)} video(s) — watch them in Review"
+                        return ("no video was produced (the script didn't pass the "
+                                "quality gate, or the AI call failed — see the error above)")
                     finally:
                         led.close()
                 self._json({"job": _job_start("produce", f"producing {count} for {ch.name}", run)})
             elif self.path == "/api/action/publish":
                 ch = cfg.channel(body.get("channel", ""))
-                def run():
+                def run(progress):
                     from . import publish as pub
                     led = ledger_factory()
                     try:
+                        progress("scheduling approved videos…")
                         res = pub.publish_approved(cfg, led, ch)
                         pub.sweep_live(cfg, led, ch)
                         return f"{len(res)} scheduled"

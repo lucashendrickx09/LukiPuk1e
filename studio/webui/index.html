@@ -112,6 +112,28 @@
   #jobsbar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);
     padding:8px 20px;font-size:13px;display:none;z-index:20}
   #jobsbar .jb{margin-right:18px}
+  /* prominent live status panel */
+  #statuspanel{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);width:min(560px,92vw);
+    background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);display:none;z-index:40}
+  #statuspanel.run{border-color:var(--accent-dim)}
+  #statuspanel.ok{border-color:var(--accent)}
+  #statuspanel.err{border-color:var(--bad)}
+  #statuspanel .row{display:flex;align-items:center;gap:11px}
+  #statuspanel .ic{font-size:22px;line-height:1}
+  #statuspanel .ttl{font-weight:700;font-size:15px}
+  #statuspanel .msg{color:var(--ink2);font-size:13px;margin-top:3px;word-break:break-word}
+  #statuspanel .el{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;font-size:13px}
+  #statuspanel .track{height:8px;border-radius:6px;background:var(--card2);overflow:hidden;margin-top:12px}
+  #statuspanel .track .fill{height:100%;width:38%;border-radius:6px;background:var(--accent);
+    animation:slide 1.15s ease-in-out infinite}
+  #statuspanel.ok .track .fill,#statuspanel.err .track .fill{width:100%;animation:none}
+  #statuspanel.err .track .fill{background:var(--bad)}
+  #statuspanel .spin{display:inline-block;width:18px;height:18px;border:3px solid var(--card2);
+    border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+  #statuspanel .x{margin-left:10px;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
+  @keyframes slide{0%{margin-left:-40%}100%{margin-left:100%}}
+  @keyframes spin{to{transform:rotate(360deg)}}
   #toast{position:fixed;bottom:52px;left:50%;transform:translateX(-50%);background:var(--card2);
     border:1px solid var(--accent-dim);border-radius:10px;padding:10px 18px;font-size:13px;display:none;z-index:30}
   .tip{position:fixed;pointer-events:none;background:var(--card2);border:1px solid var(--line);
@@ -233,6 +255,15 @@
   </div>
 </div>
 <div id="jobsbar"></div>
+<div id="statuspanel">
+  <div class="row">
+    <span class="ic"></span>
+    <div style="min-width:0"><div class="ttl"></div><div class="msg"></div></div>
+    <span class="el"></span>
+    <span class="x" onclick="document.getElementById('statuspanel').style.display='none'" title="dismiss">×</span>
+  </div>
+  <div class="track"><div class="fill"></div></div>
+</div>
 <div id="toast"></div>
 <div class="tip" id="tip"></div>
 
@@ -418,7 +449,7 @@ async function loadPipeline(){
     :'<div class="empty">nothing scheduled yet</div>');
 }
 async function runResearch(ch){const r=await act("/api/action/research",{channel:ch});if(r)watchJobs()}
-async function runProduce(ch){const r=await act("/api/action/produce",{channel:ch,count:1});if(r){toast("Producing — script, voice, scenes, render. Watch the jobs bar.");watchJobs()}}
+async function runProduce(ch){const r=await act("/api/action/produce",{channel:ch,count:1});if(r)watchJobs()}
 async function runPublish(ch){const r=await act("/api/action/publish",{channel:ch});if(r)watchJobs()}
 async function doApprove(id){const r=await act("/api/action/approve",{video_id:id});if(r){toast("Approved");loadPipeline()}}
 async function doReject(id){
@@ -440,19 +471,42 @@ async function doDiagnose(b){
   if(r){toast("Claude is analyzing — watch the jobs bar");watchJobs()}
 }
 
-/* ---------- jobs ---------- */
+/* ---------- jobs: live status panel ---------- */
+const JOB_TITLES={produce:"Making your video",research:"Finding ideas",publish:"Publishing",
+  diagnose:"Analyzing the channel","youtube-connect":"Connecting YouTube",update:"Updating the app"};
+let statusTick=null;
+function renderStatus(job){
+  const p=$("#statuspanel");if(!p)return;
+  const el=$("#statuspanel .el"),ic=$("#statuspanel .ic"),ttl=$("#statuspanel .ttl"),msg=$("#statuspanel .msg");
+  p.style.display="block";
+  p.className=job.status==="running"?"run":(job.status==="done"?"ok":"err");
+  ttl.textContent=JOB_TITLES[job.kind]||job.kind;
+  if(job.status==="running"){
+    ic.innerHTML='<span class="spin"></span>';
+    msg.textContent=job.progress||job.detail||"working…";
+    clearInterval(statusTick);
+    const t0=job.started?job.started*1000:Date.now();
+    const upd=()=>{const s=Math.max(0,Math.round((Date.now()-t0)/1000));el.textContent=(s<60?s+"s":Math.floor(s/60)+"m "+(s%60)+"s");};
+    upd();statusTick=setInterval(upd,1000);
+  }else{
+    clearInterval(statusTick);el.textContent="";
+    ic.textContent=job.status==="done"?"✅":"⚠️";
+    msg.textContent=job.result||(job.status==="done"?"Done.":"Something went wrong.");
+  }
+}
 async function watchJobs(){
   if(IS_PREVIEW)return;
   clearInterval(jobTimer);
   jobTimer=setInterval(async()=>{
-    const jobs=await api("/api/jobs");
-    const running=jobs.filter(j=>j.status==="running");
-    const bar=$("#jobsbar");
-    if(jobs.length){bar.style.display="block";
-      bar.innerHTML=jobs.slice(0,4).map(j=>`<span class="jb">${j.status==="running"?"⏳":j.status==="done"?"✓":"✕"}
-        <b>${j.kind}</b> ${esc(j.detail)} ${j.result?"— "+esc(j.result):""}</span>`).join("");}
-    if(!running.length){clearInterval(jobTimer);route();setTimeout(()=>bar.style.display="none",8000)}
-  },2000);
+    let jobs;try{jobs=await api("/api/jobs")}catch(e){return}
+    if(!jobs||!jobs.length)return;
+    const latest=jobs[0];                 // newest first
+    renderStatus(latest);
+    if(latest.status!=="running"){
+      clearInterval(jobTimer);route();     // refresh data (e.g. Review list)
+      setTimeout(()=>{const p=$("#statuspanel");if(p&&!p.classList.contains("run"))p.style.display="none";},12000);
+    }
+  },1200);
 }
 
 /* ---------- shared ---------- */
