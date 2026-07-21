@@ -133,9 +133,12 @@
 
   <div id="setup" style="display:none;position:fixed;inset:0;background:rgba(3,5,4,.82);z-index:50;align-items:center;justify-content:center;padding:16px">
     <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:460px;width:100%;padding:26px">
-      <h2 style="margin-bottom:6px">Connect your Anthropic API key</h2>
-      <p class="sub" style="margin-bottom:14px">Powers research, scripts and deep analysis. It's saved only on this device and never leaves it. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.</p>
-      <input id="keyInput" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false"
+      <h2 style="margin-bottom:6px">Connect your AI</h2>
+      <p class="sub" style="margin-bottom:12px">Powers research, scripts and deep analysis. Your key is saved only on this device and never leaves it.</p>
+      <label class="sub" style="display:block;margin-bottom:5px">AI provider</label>
+      <select id="provider" onchange="providerChanged()" style="width:100%;padding:10px 12px;background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--ink);font:14px system-ui;margin-bottom:12px"></select>
+      <div id="keyHint" class="sub" style="margin-bottom:6px"></div>
+      <input id="keyInput" type="password" placeholder="paste your key" autocomplete="off" spellcheck="false"
          style="width:100%;padding:11px 13px;background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--ink);font:14px system-ui;margin-bottom:12px">
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button onclick="closeSettings()">Later</button>
@@ -491,19 +494,39 @@ function mdRender(md){
   }).join("");
   function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")}
 }
-/* ---------- settings / API key onboarding ---------- */
+/* ---------- settings / AI provider + key onboarding ---------- */
+let PROVIDERS_INFO={};
+function fillProviders(s){
+  PROVIDERS_INFO=s.providers||{};
+  const sel=$("#provider");if(!sel||!Object.keys(PROVIDERS_INFO).length)return;
+  const cur=s.provider||"anthropic";
+  sel.innerHTML=Object.keys(PROVIDERS_INFO).map(k=>
+    `<option value="${k}" ${k===cur?'selected':''}>${esc(PROVIDERS_INFO[k].label)}</option>`).join("");
+  providerChanged();
+}
+function providerChanged(){
+  const sel=$("#provider");if(!sel)return;
+  const info=PROVIDERS_INFO[sel.value]||{};
+  const host=(info.key_url||"").replace(/^https?:\/\//,"");
+  $("#keyHint").innerHTML=info.key_url?`Get a free key: <a href="${info.key_url}" target="_blank">${esc(host)}</a>${info.key_hint?" — "+esc(info.key_hint):""}`:"";
+  const inp=$("#keyInput");if(inp)inp.placeholder=sel.value==="gemini"?"AIza...":(sel.value==="anthropic"?"sk-ant-...":"paste your key");
+}
 async function checkSettings(){
   if(IS_PREVIEW)return;
-  try{const s=await api("/api/settings"); if(s&&!s.has_key)openSettings(true);}catch(e){}
+  try{const s=await api("/api/settings");if(s&&s.providers)fillProviders(s);if(s&&!s.has_key)openSettings(true);}catch(e){}
 }
-function openSettings(force){const el=$("#setup");if(!el)return;el.style.display="flex";
-  const i=$("#keyInput");if(force&&i)i.focus();}
+async function openSettings(force){
+  const el=$("#setup");if(!el)return;
+  if(!Object.keys(PROVIDERS_INFO).length){try{const s=await api("/api/settings");if(s&&s.providers)fillProviders(s);}catch(e){}}
+  el.style.display="flex";const i=$("#keyInput");if(force&&i)i.focus();
+}
 function closeSettings(){const el=$("#setup");if(el)el.style.display="none";}
 async function saveKey(btn){
   const inp=$("#keyInput"),msg=$("#keyMsg"),key=(inp.value||"").trim();
+  const provider=($("#provider")&&$("#provider").value)||"anthropic";
   if(!key){msg.style.color="var(--warn)";msg.textContent="Paste your key first.";return}
   btn.disabled=true;msg.style.color="var(--ink2)";msg.textContent="Saving…";
-  const r=await act("/api/settings/key",{key});
+  const r=await act("/api/settings/key",{provider,key});
   btn.disabled=false;
   if(r&&r.ok){msg.style.color="var(--accent)";msg.textContent="Connected — you're all set.";inp.value="";setTimeout(closeSettings,900)}
   else{msg.style.color="var(--bad)";msg.textContent=(r&&r.error)||"Could not save that key."}

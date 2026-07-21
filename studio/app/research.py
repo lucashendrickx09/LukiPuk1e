@@ -47,9 +47,11 @@ def _extract_json_array(text: str) -> list[dict]:
 
 
 def make_client(cfg):
-    """Anthropic client (lazy import so tests never need the SDK/network)."""
-    import anthropic
-    return anthropic.Anthropic(api_key=cfg.anthropic_api_key or None)
+    """LLM client for the configured provider (Anthropic SDK, or an
+    OpenAI-compatible adapter for free providers like Gemini). Lazy so tests
+    never need the SDK/network."""
+    from . import llm
+    return llm.make_client(cfg)
 
 
 def run_research(cfg, channel, client=None, use_web_search: bool = True) -> list[dict]:

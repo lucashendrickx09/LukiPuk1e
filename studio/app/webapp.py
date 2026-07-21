@@ -66,19 +66,26 @@ def save_client_secret(cfg, raw: str) -> list[str]:
     return saved
 
 
-def _save_api_key(cfg, key: str) -> None:
-    """Persist the Anthropic key to the writable .env and make it live on cfg
-    (so the running app can research/produce immediately, no restart)."""
+def save_llm_settings(cfg, provider: str, key: str) -> None:
+    """Persist the chosen AI provider + key to the writable .env and make them
+    live on cfg (so the running app can research/produce immediately, no restart)."""
+    from . import llm
+    provider = provider if provider in llm.PROVIDERS else "anthropic"
+    preset = llm.PROVIDERS[provider]
     key = (key or "").strip()
     env_path = runtime.user_dir() / ".env"
+    drop = ("ANTHROPIC_API_KEY", "LLM_API_KEY", "LLM_PROVIDER", "LLM_MODEL")
     lines = []
     if env_path.exists():
         lines = [l for l in env_path.read_text().splitlines()
-                 if not l.strip().startswith("ANTHROPIC_API_KEY")]
-    lines.append(f"ANTHROPIC_API_KEY={key}")
+                 if l.split("=", 1)[0].strip() not in drop]
+    lines += [f"LLM_PROVIDER={provider}", f"LLM_MODEL={preset['model']}", f"LLM_API_KEY={key}"]
     env_path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    cfg.provider = provider
+    cfg.model = preset["model"]
+    cfg.llm_base_url = preset["base_url"]
     cfg.anthropic_api_key = key
-    os.environ["ANTHROPIC_API_KEY"] = key
+    os.environ.update(LLM_PROVIDER=provider, LLM_API_KEY=key, LLM_MODEL=preset["model"])
 
 BENCHMARKS = {
     "retention_gate_short_pct": 65.0,
@@ -475,7 +482,12 @@ def make_handler(cfg, ledger_factory):
             elif path == "/api/jobs":
                 self._json(jobs_snapshot())
             elif path == "/api/settings":
+                from . import llm
                 self._json({"has_key": bool(cfg.anthropic_api_key),
+                            "provider": getattr(cfg, "provider", "anthropic"),
+                            "providers": {k: {"label": v["label"], "key_url": v.get("key_url", ""),
+                                              "key_hint": v.get("key_hint", "")}
+                                          for k, v in llm.PROVIDERS.items()},
                             "frozen": runtime.is_frozen(),
                             "channels": [c.name for c in cfg.channels]})
             elif path == "/api/youtube":
@@ -532,12 +544,12 @@ def make_handler(cfg, ledger_factory):
         def do_POST(self):
             body = self._body()
             if self.path == "/api/settings/key":
+                provider = body.get("provider") or "anthropic"
                 key = (body.get("key") or "").strip()
-                if not key.startswith("sk-"):
-                    self._json({"error": "that doesn't look like an Anthropic key "
-                                         "(it should start with 'sk-')"}, 400)
+                if not key:
+                    self._json({"error": "Paste your key first."}, 400)
                 else:
-                    _save_api_key(cfg, key)
+                    save_llm_settings(cfg, provider, key)
                     self._json({"ok": True, "has_key": True})
             elif self.path == "/api/youtube/client-secret":
                 raw = body.get("json", "")

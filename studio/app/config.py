@@ -52,8 +52,10 @@ class ChannelConfig:
 class Config:
     root: Path
     data_dir: Path
+    provider: str = "anthropic"      # anthropic | gemini | groq (app/llm.py)
     model: str = "claude-opus-4-8"
-    anthropic_api_key: str = ""
+    llm_base_url: str = ""           # OpenAI-compatible endpoint for non-anthropic providers
+    anthropic_api_key: str = ""      # the LLM API key (name kept for back-compat)
     channels: list[ChannelConfig] = field(default_factory=list)
     # formula
     weights_stage1: dict = field(default_factory=lambda: {"trend": 0.30, "rpm": 0.25, "novelty": 0.20, "prior": 0.25})
@@ -96,7 +98,7 @@ def _load_env(root: Path) -> dict:
                 continue
             k, _, v = line.partition("=")
             env[k.strip()] = v.strip().strip("'\"")
-    env.update({k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC", "STUDIO"))})
+    env.update({k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC", "STUDIO", "LLM_"))})
     return env
 
 
@@ -116,6 +118,18 @@ def load_config(path: str | Path | None = None) -> Config:
     raw = raw or {}
     env = _load_env(udir)
 
+    # LLM provider: default anthropic; the app can switch to a free provider
+    # (gemini/groq) from its settings, which writes LLM_PROVIDER/LLM_API_KEY to .env
+    from .llm import PROVIDERS
+    provider = env.get("LLM_PROVIDER") or raw.get("llm", {}).get("provider") or "anthropic"
+    preset = PROVIDERS.get(provider, PROVIDERS["anthropic"])
+    # explicit LLM_MODEL wins; else the config.yaml model applies only to anthropic
+    # (the provider's own default model is used for gemini/groq)
+    llm_model = (env.get("LLM_MODEL")
+                 or (raw.get("model") if provider == "anthropic" else None)
+                 or preset["model"])
+    llm_key = env.get("LLM_API_KEY") or env.get("ANTHROPIC_API_KEY", "")
+
     channels = [ChannelConfig(**c) for c in raw.get("channels", [])]
     # resolve per-channel OAuth secret/token paths into the writable user dir so
     # they work no matter what folder the app is launched from
@@ -134,8 +148,10 @@ def load_config(path: str | Path | None = None) -> Config:
     cfg = Config(
         root=root,
         data_dir=data_dir,
-        model=raw.get("model", "claude-opus-4-8"),
-        anthropic_api_key=env.get("ANTHROPIC_API_KEY", ""),
+        provider=provider,
+        model=llm_model,
+        llm_base_url=preset["base_url"],
+        anthropic_api_key=llm_key,
         channels=channels,
         weights_stage1=formula.get("weights_stage1", Config.__dataclass_fields__["weights_stage1"].default_factory()),
         weights_stage2=formula.get("weights_stage2", Config.__dataclass_fields__["weights_stage2"].default_factory()),
