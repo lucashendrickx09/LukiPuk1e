@@ -42,6 +42,30 @@ from . import analytics, brand, diagnose, formula, runtime
 WEBUI = runtime.resource_root() / "webui"
 
 
+def youtube_status(cfg) -> dict:
+    """Per-channel YouTube connection state for the dashboard card."""
+    chans = []
+    for ch in cfg.channels:
+        cs = Path(ch.client_secret_file) if ch.client_secret_file else None
+        tk = Path(ch.token_file) if ch.token_file else None
+        chans.append({"name": ch.name, "handle": ch.handle,
+                      "has_secret": bool(cs and cs.exists()),
+                      "connected": bool(tk and tk.exists())})
+    return {"channels": chans, "any_secret": any(c["has_secret"] for c in chans)}
+
+
+def save_client_secret(cfg, raw: str) -> list[str]:
+    """Store the uploaded Google OAuth client secret for every channel (one Google
+    Cloud project can authorize both of your channels)."""
+    saved = []
+    for ch in cfg.channels:
+        p = Path(ch.client_secret_file)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(raw)
+        saved.append(ch.name)
+    return saved
+
+
 def _save_api_key(cfg, key: str) -> None:
     """Persist the Anthropic key to the writable .env and make it live on cfg
     (so the running app can research/produce immediately, no restart)."""
@@ -454,6 +478,8 @@ def make_handler(cfg, ledger_factory):
                 self._json({"has_key": bool(cfg.anthropic_api_key),
                             "frozen": runtime.is_frozen(),
                             "channels": [c.name for c in cfg.channels]})
+            elif path == "/api/youtube":
+                self._json(youtube_status(cfg))
             elif path == "/api/report":
                 name = Path(params.get("name", "")).name  # no traversal
                 f = cfg.data_dir / "reports" / name
@@ -510,6 +536,31 @@ def make_handler(cfg, ledger_factory):
                 else:
                     _save_api_key(cfg, key)
                     self._json({"ok": True, "has_key": True})
+            elif self.path == "/api/youtube/client-secret":
+                raw = body.get("json", "")
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    parsed = None
+                if not isinstance(parsed, dict) or not ("installed" in parsed or "web" in parsed):
+                    self._json({"error": "That file isn't a Google OAuth client secret. "
+                                "In Google Cloud, create an OAuth client of type "
+                                "'Desktop app' and download its JSON."}, 400)
+                else:
+                    saved = save_client_secret(cfg, raw)
+                    self._json({"ok": True, "saved_for": saved})
+            elif self.path == "/api/youtube/connect":
+                try:
+                    ch = cfg.channel(body.get("channel", ""))
+                except KeyError:
+                    self._json({"error": "unknown channel"}, 400)
+                else:
+                    def run(ch=ch):
+                        from . import publish as pub
+                        p = pub.auth_channel(ch)
+                        return f"connected {ch.name}"
+                    self._json({"job": _job_start("youtube-connect",
+                                f"a Google sign-in window is opening for {ch.name}", run)})
             elif self.path == "/api/refresh":
                 self._json(self._with_ledger(lambda led: refresh(cfg, led)))
             elif self.path == "/api/diagnose":

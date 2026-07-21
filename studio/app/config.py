@@ -117,6 +117,13 @@ def load_config(path: str | Path | None = None) -> Config:
     env = _load_env(udir)
 
     channels = [ChannelConfig(**c) for c in raw.get("channels", [])]
+    # resolve per-channel OAuth secret/token paths into the writable user dir so
+    # they work no matter what folder the app is launched from
+    for ch in channels:
+        for attr in ("client_secret_file", "token_file"):
+            v = getattr(ch, attr)
+            if v and not Path(v).is_absolute():
+                setattr(ch, attr, str(udir / v))
     data_dir = Path(raw.get("data_dir", udir / "data"))
     data_dir.mkdir(parents=True, exist_ok=True)
 

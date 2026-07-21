@@ -151,6 +151,22 @@
   </nav>
 
   <div class="page" id="page-dashboard">
+    <div class="card" id="ytCard" style="margin-bottom:16px">
+      <h2>📺 Connect YouTube <span class="sp"></span><a href="#" onclick="toggleYtHelp(event)" style="font-size:13px">how to get the file ▾</a></h2>
+      <div id="ytHelp" style="display:none;background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin:10px 0;font-size:13px;line-height:1.7;color:var(--ink2)">
+        <b style="color:var(--ink)">One-time Google setup</b> (needed so the app can post to your channels):
+        <ol style="margin:8px 0 4px 20px">
+          <li>Go to <a href="https://console.cloud.google.com/projectcreate" target="_blank">console.cloud.google.com</a> → create a project (any name).</li>
+          <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">Enable the YouTube Data API v3</a> for it.</li>
+          <li>APIs &amp; Services → <b>OAuth consent screen</b> → External → fill the app name + your email → add <b>yourself as a Test user</b>.</li>
+          <li>APIs &amp; Services → <b>Credentials</b> → Create credentials → <b>OAuth client ID</b> → type <b>Desktop app</b> → Create → <b>Download JSON</b>.</li>
+          <li>Back here: click <b>Upload Google credentials</b> below, pick that JSON, then <b>Connect</b> each channel and sign in as that channel.</li>
+        </ol>
+        <span style="color:var(--warn)">Note: brand-new API projects upload videos as <b>Private</b> until Google approves an audit — you flip them public in YouTube Studio (10s) meanwhile.</span>
+      </div>
+      <div id="ytBody" class="sub">Loading…</div>
+      <input type="file" id="ytFile" accept=".json,application/json" style="display:none" onchange="uploadClientSecret(this)">
+    </div>
     <div class="grid cols2" id="channels"></div>
     <div class="grid cols2 section">
       <div class="card">
@@ -230,7 +246,7 @@ function route(){
   const page=(location.hash||"#dashboard").slice(1);
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="page-"+page));
   document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.page===page));
-  if(page==="dashboard")loadSummary();
+  if(page==="dashboard"){loadSummary();loadYouTube();}
   if(page==="analytics")loadAnalytics();
   if(page==="method")loadPipeline();
 }
@@ -485,6 +501,35 @@ async function saveKey(btn){
   btn.disabled=false;
   if(r&&r.ok){msg.style.color="var(--accent)";msg.textContent="Connected — you're all set.";inp.value="";setTimeout(closeSettings,900)}
   else{msg.style.color="var(--bad)";msg.textContent=(r&&r.error)||"Could not save that key."}
+}
+
+/* ---------- connect youtube ---------- */
+function toggleYtHelp(e){e.preventDefault();const h=$("#ytHelp");h.style.display=h.style.display==="none"?"block":"none";}
+async function loadYouTube(){
+  if(IS_PREVIEW){$("#ytBody").innerHTML="<span class='sub'>Preview mode — controls are live in the app.</span>";return;}
+  const s=await api("/api/youtube");if(!s||!s.channels)return;
+  const rows=s.channels.map(c=>{
+    const st=c.connected?`<span class="s ok">✓ connected</span>`
+      :(c.has_secret?`<span class="s warnc">needs sign-in</span>`
+        :`<span class="s" style="color:var(--muted)">waiting for credentials</span>`);
+    const btn=`<button class="sm ${c.connected?'':'primary'}" onclick="connectChannel('${c.name}',this)" ${c.has_secret?'':'disabled'}>${c.connected?'Reconnect':'Connect'}</button>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)"><b>${esc(c.handle||c.name)}</b> ${st}<span class="sp"></span>${btn}</div>`;
+  }).join("");
+  const up=`<div style="margin-top:12px"><button class="sm" onclick="$('#ytFile').click()">${s.any_secret?'Replace':'⬆ Upload'} Google credentials (.json)</button></div>`;
+  $("#ytBody").innerHTML=rows+up;
+}
+async function uploadClientSecret(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  const text=await f.text();input.value="";
+  const r=await act("/api/youtube/client-secret",{json:text});
+  if(r&&r.ok){toast("Credentials saved. Now click Connect for each channel.");loadYouTube();}
+  else{toast((r&&r.error)||"That file wasn't accepted — was it the Desktop-app JSON?");}
+}
+async function connectChannel(name,btn){
+  btn.disabled=true;btn.textContent="Opening…";
+  const r=await act("/api/youtube/connect",{channel:name});
+  if(r&&r.job){toast("A Google sign-in tab is opening — pick your "+name+" channel and allow access.");watchJobs();}
+  else{toast((r&&r.error)||"Could not start sign-in");btn.disabled=false;}
 }
 
 route();
