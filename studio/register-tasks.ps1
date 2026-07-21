@@ -31,18 +31,18 @@ foreach ($n in @($runName, $pubName)) {
         Write-Host "removed existing task: $n"
     }
 }
-if ($Remove) { Write-Host "Done — automation removed."; exit 0 }
+if ($Remove) { Write-Host "Done - automation removed."; exit 0 }
 
 $venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPy)) {
-    Write-Host "!! .venv not found — run setup.ps1 (or setup.bat) first." -ForegroundColor Red
+    Write-Host "!! .venv not found - run setup.ps1 (or setup.bat) first." -ForegroundColor Red
     exit 1
 }
 if (-not (Test-Path "data")) { New-Item -ItemType Directory -Path "data" | Out-Null }
 
 # run cmd.exe so we can redirect output to a rolling log the same way cron does.
 # The whole command is wrapped in an OUTER pair of quotes: cmd /c strips exactly
-# that outer pair, leaving the (separately quoted) exe path and log path intact —
+# that outer pair, leaving the (separately quoted) exe path and log path intact -
 # without the wrapper, cmd mangles paths that contain spaces.
 function New-StudioAction([string]$sub) {
     $inner = "`"$venvPy`" run.py $sub >> `"$PSScriptRoot\data\run.log`" 2>&1"

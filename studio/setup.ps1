@@ -29,7 +29,7 @@ foreach ($cand in @("py", "python", "python3")) {
     if (Get-Command $cand -ErrorAction SilentlyContinue) { $py = $cand; break }
 }
 if (-not $py) {
-    Write-Host "python not found — install Python 3.10+ first:" -ForegroundColor Red
+    Write-Host "python not found - install Python 3.10+ first:" -ForegroundColor Red
     Write-Host "   winget install Python.Python.3.12"
     Write-Host "   (tick 'Add python.exe to PATH' if you use the installer), then re-run setup.bat"
     exit 1
@@ -60,7 +60,7 @@ Write-Host "==> installing core dependencies (progress shows below)"
 
 if (-not $Lite) {
     Write-Host "==> installing local voice (Kokoro TTS)" -ForegroundColor Cyan
-    Write-Host "    This downloads PyTorch. We install the CPU build (~200MB) on purpose —"
+    Write-Host "    This downloads PyTorch. We install the CPU build (~200MB) on purpose -"
     Write-Host "    the default Windows wheel is the ~2.5GB CUDA build we don't need."
     Write-Host "    A few minutes with a slow-moving bar is normal. Let it run."
     try {
@@ -69,7 +69,7 @@ if (-not $Lite) {
         & $venvPy -m pip install torch --index-url https://download.pytorch.org/whl/cpu
         & $venvPy -m pip install -r requirements-voice.txt
     } catch {
-        Write-Host "!! voice install failed — retry later with:  .venv\Scripts\python -m pip install -r requirements-voice.txt" -ForegroundColor Yellow
+        Write-Host "!! voice install failed - retry later with:  .venv\Scripts\python -m pip install -r requirements-voice.txt" -ForegroundColor Yellow
     }
 }
 
@@ -97,9 +97,9 @@ if ((-not $keyVal) -or ($keyVal -eq 'sk-ant-...')) {
             $content += "ANTHROPIC_API_KEY=$key"
         }
         Set-Content -Path $envPath -Value $content -Encoding ascii  # no BOM; key is ASCII
-        Write-Host "==> saved your key to .env (this file is gitignored — it never gets committed)" -ForegroundColor Green
+        Write-Host "==> saved your key to .env (this file is gitignored - it never gets committed)" -ForegroundColor Green
     } else {
-        Write-Host "==> no key entered — edit .env and set ANTHROPIC_API_KEY before running research/produce" -ForegroundColor Yellow
+        Write-Host "==> no key entered - edit .env and set ANTHROPIC_API_KEY before running research/produce" -ForegroundColor Yellow
     }
 }
 if (-not (Test-Path "secrets")) { New-Item -ItemType Directory -Path "secrets" | Out-Null }
@@ -112,9 +112,9 @@ Write-Host ""
 $ans = Read-Host "Render a free style-preview video now? (y/N)"
 if ($ans -match '^(y|yes)$') {
     & $venvPy run.py sample
-    Write-Host "Done — open the studio\data\renders\ folder to watch it." -ForegroundColor Green
+    Write-Host "Done - open the studio\data\renders\ folder to watch it." -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "Next: read LAUNCH.md (the Windows track) — the step-by-step launch runbook."
+Write-Host "Next: read LAUNCH.md (the Windows track) - the step-by-step launch runbook."
 Write-Host "Tip: activate the venv in new windows with:  .venv\Scripts\Activate.ps1"

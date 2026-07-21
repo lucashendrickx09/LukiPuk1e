@@ -1,5 +1,5 @@
 @echo off
-REM Friendly Windows entry point — double-click or run from a terminal.
+REM Friendly Windows entry point - double-click or run from a terminal.
 REM Bypasses PowerShell's execution policy just for this one script.
 REM   setup.bat            core + local voice
 REM   setup.bat --lite     core only (skips the torch/Kokoro download)
