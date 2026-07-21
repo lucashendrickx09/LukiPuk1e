@@ -51,6 +51,11 @@ jobs:
           if (-not $enc) { throw "bundled ffmpeg is missing libx264" }
           Write-Host "libx264 present: $enc"
 
+      - name: Stamp build version
+        shell: pwsh
+        run: |
+          Set-Content -Path VERSION -Value "${{ github.sha }}" -NoNewline -Encoding ascii
+
       - name: Build the app
         run: pyinstaller shortsstudio.spec --noconfirm
 
@@ -74,7 +79,10 @@ jobs:
 
             No install, no Python, no setup. On first launch it opens the dashboard
             in your browser and asks for your Anthropic API key (saved only on your PC).
+            The app updates itself from here — you only download it once.
 
             Built automatically from the latest code on every change.
+
+            build: ${{ github.sha }}
           files: studio/dist/ShortsStudio.exe
           fail_on_unmatched_files: true

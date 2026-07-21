@@ -16,6 +16,9 @@ datas = [
 # bundle ffmpeg/ffprobe if the build placed them here (Windows CI does)
 if os.path.isdir("ffmpeg"):
     datas.append(("ffmpeg", "ffmpeg"))
+# build-version stamp (CI writes it; enables in-app auto-update)
+if os.path.exists("VERSION"):
+    datas.append(("VERSION", "."))
 
 hiddenimports = [
     "edge_tts", "anthropic", "yaml", "zoneinfo",

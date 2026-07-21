@@ -150,6 +150,12 @@
     <a href="#method" data-page="method">Method&nbsp;·&nbsp;Studio</a>
   </nav>
 
+  <div id="updateBanner" style="display:none;background:linear-gradient(90deg,rgba(53,232,122,.14),transparent);border:1px solid var(--accent-dim);border-radius:10px;padding:12px 16px;margin:0 0 16px;align-items:center;gap:12px">
+    <span>🎉 A newer version of the app is ready.</span>
+    <span class="sp"></span>
+    <button class="primary sm" onclick="doUpdate(this)">Update now</button>
+  </div>
+
   <div class="page" id="page-dashboard">
     <div class="card" id="ytCard" style="margin-bottom:16px">
       <h2>📺 Connect YouTube <span class="sp"></span><a href="#" onclick="toggleYtHelp(event)" style="font-size:13px">how to get the file ▾</a></h2>
@@ -246,7 +252,7 @@ function route(){
   const page=(location.hash||"#dashboard").slice(1);
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="page-"+page));
   document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.page===page));
-  if(page==="dashboard"){loadSummary();loadYouTube();}
+  if(page==="dashboard"){loadSummary();loadYouTube();loadUpdate();}
   if(page==="analytics")loadAnalytics();
   if(page==="method")loadPipeline();
 }
@@ -501,6 +507,23 @@ async function saveKey(btn){
   btn.disabled=false;
   if(r&&r.ok){msg.style.color="var(--accent)";msg.textContent="Connected — you're all set.";inp.value="";setTimeout(closeSettings,900)}
   else{msg.style.color="var(--bad)";msg.textContent=(r&&r.error)||"Could not save that key."}
+}
+
+/* ---------- auto-update ---------- */
+async function loadUpdate(){
+  if(IS_PREVIEW)return;
+  try{const u=await api("/api/update");
+    if(u&&u.update_available)$("#updateBanner").style.display="flex";}catch(e){}
+}
+async function doUpdate(btn){
+  btn.disabled=true;btn.textContent="Downloading…";
+  const r=await act("/api/update/apply",{});
+  if(r&&r.job){
+    $("#updateBanner").innerHTML="<span>⏳ Downloading the update — the app will restart and open a fresh window in a moment. You can close this tab once it does.</span>";
+  }else{
+    toast((r&&r.error)||"Update couldn't start — you can re-download from the Releases page.");
+    btn.disabled=false;btn.textContent="Update now";
+  }
 }
 
 /* ---------- connect youtube ---------- */

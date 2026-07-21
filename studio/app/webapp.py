@@ -480,6 +480,9 @@ def make_handler(cfg, ledger_factory):
                             "channels": [c.name for c in cfg.channels]})
             elif path == "/api/youtube":
                 self._json(youtube_status(cfg))
+            elif path == "/api/update":
+                from . import version
+                self._json(version.check())
             elif path == "/api/report":
                 name = Path(params.get("name", "")).name  # no traversal
                 f = cfg.data_dir / "reports" / name
@@ -561,6 +564,17 @@ def make_handler(cfg, ledger_factory):
                         return f"connected {ch.name}"
                     self._json({"job": _job_start("youtube-connect",
                                 f"a Google sign-in window is opening for {ch.name}", run)})
+            elif self.path == "/api/update/apply":
+                from . import version
+                info = version.check()
+                if not info.get("update_available"):
+                    self._json({"error": "already up to date"}, 400)
+                else:
+                    def run(url=info["download_url"]):
+                        version.apply(url)   # downloads, then restarts the app
+                        return "downloaded; restarting"
+                    self._json({"job": _job_start("update",
+                                "downloading the new version, then restarting", run)})
             elif self.path == "/api/refresh":
                 self._json(self._with_ledger(lambda led: refresh(cfg, led)))
             elif self.path == "/api/diagnose":
