@@ -54,23 +54,21 @@ if (-not (Test-Path $venvPy)) {
     exit 1
 }
 
+# generous timeouts/retries so a shaky connection doesn't abort mid-download
+$pipOpts = @("--timeout", "60", "--retries", "5")
+
 Write-Host "==> installing core dependencies (progress shows below)"
-& $venvPy -m pip install --upgrade pip
-& $venvPy -m pip install -r requirements.txt
+& $venvPy -m pip install @pipOpts --upgrade pip
+& $venvPy -m pip install @pipOpts -r requirements.txt
 
 if (-not $Lite) {
-    Write-Host "==> installing local voice (Kokoro TTS)" -ForegroundColor Cyan
-    Write-Host "    This downloads PyTorch. We install the CPU build (~200MB) on purpose -"
-    Write-Host "    the default Windows wheel is the ~2.5GB CUDA build we don't need."
-    Write-Host "    A few minutes with a slow-moving bar is normal. Let it run."
-    try {
-        # CPU-only torch first, so kokoro's torch dependency is already satisfied and
-        # pip never pulls the giant CUDA wheel. We render/voice on CPU either way.
-        & $venvPy -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-        & $venvPy -m pip install -r requirements-voice.txt
-    } catch {
-        Write-Host "!! voice install failed - retry later with:  .venv\Scripts\python -m pip install -r requirements-voice.txt" -ForegroundColor Yellow
-    }
+    # Default voice = edge-tts: a few KB to install, real Microsoft neural voices,
+    # NO giant PyTorch download. Reliable even on a slow/flaky connection. The
+    # offline Kokoro voice is an optional upgrade later (install-local-voice.bat).
+    Write-Host "==> installing voice (edge-tts - small download, no PyTorch)" -ForegroundColor Cyan
+    & $venvPy -m pip install @pipOpts edge-tts
+    Write-Host "    Optional later, on a stable connection: double-click install-local-voice.bat" -ForegroundColor DarkGray
+    Write-Host "    for the offline Kokoro voice (higher quality, ~200MB PyTorch)." -ForegroundColor DarkGray
 }
 
 # --- .env + API key (no Notepad needed) -----------------------------------

@@ -71,14 +71,13 @@ def cmd_doctor(args):
         pass
     try:
         import kokoro  # noqa
-        check("kokoro tts (local, best)", True)
+        check("voice engine (kokoro, local/offline)", True)
     except ImportError:
         try:
             import edge_tts  # noqa
-            check("kokoro tts (local, best)", False, "using edge-tts fallback; pip install -r requirements-voice.txt for local voice")
-            ok = True
+            check("voice engine (edge-tts, online)", True)  # a real voice; kokoro is an optional upgrade
         except ImportError:
-            check("any tts engine", False, "pip install -r requirements-voice.txt (kokoro) or pip install edge-tts")
+            check("voice engine", False, "pip install edge-tts (small) — or double-click install-local-voice.bat for kokoro")
     for ch in cfg.channels:
         from pathlib import Path
         tok = Path(ch.token_file or f"secrets/{ch.name}_token.json")
