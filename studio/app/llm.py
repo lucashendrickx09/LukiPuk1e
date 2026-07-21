@@ -108,11 +108,25 @@ class OpenAICompatClient:
             chat.append({"role": m.get("role", "user"), "content": content or ""})
 
         body = {"model": kwargs.get("model") or self.model, "messages": chat}
-        if kwargs.get("max_tokens"):
-            body["max_tokens"] = int(kwargs["max_tokens"])
+        # cap to a value every common free model accepts (Gemini Flash = 8192);
+        # our outputs (scripts, idea lists, reports) are far smaller than this
+        req_max = int(kwargs.get("max_tokens") or 4096)
+        body["max_tokens"] = min(req_max, 8192)
+
         if want_json:
             body["response_format"] = {"type": "json_object"}
+            resp = self._post(body, allow_retry=True)   # may return None on a 400
+            if resp is None:                             # provider rejected response_format
+                body.pop("response_format", None)
+                resp = self._post(body)                  # retry plainly; raises on error
+        else:
+            resp = self._post(body)                      # raises on error
 
+        text = ((resp.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        parsed = _extract_json(text) if want_json else None
+        return _Message(text, parsed=parsed)
+
+    def _post(self, body: dict, allow_retry: bool = False):
         req = urllib.request.Request(
             self.base_url + "/chat/completions",
             data=json.dumps(body).encode(),
@@ -120,15 +134,22 @@ class OpenAICompatClient:
                      "Content-Type": "application/json"},
             method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=180) as r:
-                resp = json.loads(r.read())
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return json.loads(r.read())
         except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "ignore")[:400]
-            raise RuntimeError(f"AI provider error {e.code}: {detail}")
-
-        text = ((resp.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-        parsed = _extract_json(text) if want_json else None
-        return _Message(text, parsed=parsed)
+            detail = e.read().decode("utf-8", "ignore")
+            try:  # surface the human-readable reason (providers use {..} or [{..}])
+                j = json.loads(detail)
+                if isinstance(j, list):
+                    j = j[0]
+                detail = j.get("error", {}).get("message", detail)
+            except Exception:
+                pass
+            if e.code == 400 and allow_retry:
+                return None  # caller will retry without response_format
+            raise RuntimeError(f"AI error {e.code}: {detail[:300]}")
+        except urllib.error.URLError as e:
+            raise RuntimeError(f"Could not reach the AI provider: {e.reason}")
 
 
 class _Messages:
@@ -141,6 +162,24 @@ class _Messages:
     def stream(self, **kwargs) -> _Stream:
         # the app only needs the final message; do the call now, wrap it as a stream
         return _Stream(self._client._complete(kwargs))
+
+
+def test_connection(cfg) -> tuple[bool, str]:
+    """Make one tiny real call to verify the provider + key work. Returns
+    (ok, human message). Never raises."""
+    provider = getattr(cfg, "provider", "anthropic") or "anthropic"
+    label = PROVIDERS.get(provider, {}).get("label", provider)
+    if not (cfg.anthropic_api_key or "").strip():
+        return False, "No API key set. Paste your key and save."
+    try:
+        client = make_client(cfg)
+        resp = client.messages.create(
+            model=cfg.model, max_tokens=16,
+            messages=[{"role": "user", "content": "Reply with just: OK"}])
+        text = "".join(getattr(b, "text", "") for b in resp.content).strip()
+        return True, f"Connected — {label} is working (model {cfg.model})."
+    except Exception as e:
+        return False, str(e)[:400]
 
 
 def make_client(cfg):

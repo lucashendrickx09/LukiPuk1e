@@ -164,6 +164,7 @@
          style="width:100%;padding:11px 13px;background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--ink);font:14px system-ui;margin-bottom:12px">
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button onclick="closeSettings()">Later</button>
+        <button onclick="testConn(this)">Test connection</button>
         <button class="primary" onclick="saveKey(this)">Save &amp; connect</button>
       </div>
       <div id="keyMsg" class="sub" style="margin-top:10px;min-height:16px"></div>
@@ -579,11 +580,19 @@ async function saveKey(btn){
   const inp=$("#keyInput"),msg=$("#keyMsg"),key=(inp.value||"").trim();
   const provider=($("#provider")&&$("#provider").value)||"anthropic";
   if(!key){msg.style.color="var(--warn)";msg.textContent="Paste your key first.";return}
-  btn.disabled=true;msg.style.color="var(--ink2)";msg.textContent="Saving…";
+  btn.disabled=true;msg.style.color="var(--ink2)";msg.textContent="Saving & testing the connection…";
   const r=await act("/api/settings/key",{provider,key});
   btn.disabled=false;
-  if(r&&r.ok){msg.style.color="var(--accent)";msg.textContent="Connected — you're all set.";inp.value="";setTimeout(closeSettings,900)}
+  if(r&&r.ok&&r.working){msg.style.color="var(--accent)";msg.textContent="✓ "+(r.message||"Connected — you're all set.");inp.value="";setTimeout(closeSettings,1600)}
+  else if(r&&r.ok){msg.style.color="var(--bad)";msg.textContent="Saved, but the test failed: "+(r.message||"unknown error")}
   else{msg.style.color="var(--bad)";msg.textContent=(r&&r.error)||"Could not save that key."}
+}
+async function testConn(btn){
+  const msg=$("#keyMsg");btn.disabled=true;msg.style.color="var(--ink2)";msg.textContent="Testing…";
+  const r=await act("/api/settings/test",{});
+  btn.disabled=false;
+  if(r&&r.working){msg.style.color="var(--accent)";msg.textContent="✓ "+(r.message||"Working")}
+  else{msg.style.color="var(--bad)";msg.textContent="✕ "+((r&&r.message)||"Not working")}
 }
 
 /* ---------- auto-update ---------- */

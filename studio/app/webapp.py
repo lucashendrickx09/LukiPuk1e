@@ -555,8 +555,14 @@ def make_handler(cfg, ledger_factory):
                 if not key:
                     self._json({"error": "Paste your key first."}, 400)
                 else:
+                    from . import llm
                     save_llm_settings(cfg, provider, key)
-                    self._json({"ok": True, "has_key": True})
+                    ok, msg = llm.test_connection(cfg)   # verify it actually works
+                    self._json({"ok": True, "has_key": True, "working": ok, "message": msg})
+            elif self.path == "/api/settings/test":
+                from . import llm
+                ok, msg = llm.test_connection(cfg)
+                self._json({"working": ok, "message": msg})
             elif self.path == "/api/youtube/client-secret":
                 raw = body.get("json", "")
                 try:
