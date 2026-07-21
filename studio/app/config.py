@@ -101,14 +101,23 @@ def _load_env(root: Path) -> dict:
 
 
 def load_config(path: str | Path | None = None) -> Config:
-    root = ROOT
-    cfg_path = Path(path) if path else root / "config.yaml"
+    from . import runtime
+    root = runtime.resource_root()          # read-only: config.yaml default, assets, webui
+    udir = runtime.user_dir()               # writable: .env, data, renders (== root in dev)
+    # prefer a user-editable config.yaml (bundled app writes one on first run);
+    # fall back to the default shipped in the bundle
+    if path:
+        cfg_path = Path(path)
+    elif (udir / "config.yaml").exists():
+        cfg_path = udir / "config.yaml"
+    else:
+        cfg_path = root / "config.yaml"
     raw = yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}
     raw = raw or {}
-    env = _load_env(root)
+    env = _load_env(udir)
 
     channels = [ChannelConfig(**c) for c in raw.get("channels", [])]
-    data_dir = Path(raw.get("data_dir", root / "data"))
+    data_dir = Path(raw.get("data_dir", udir / "data"))
     data_dir.mkdir(parents=True, exist_ok=True)
 
     formula = raw.get("formula", {})

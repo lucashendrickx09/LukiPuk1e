@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 import threading
 import time
@@ -36,9 +37,24 @@ import zoneinfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import analytics, brand, diagnose, formula
+from . import analytics, brand, diagnose, formula, runtime
 
-WEBUI = Path(__file__).resolve().parent.parent / "webui"
+WEBUI = runtime.resource_root() / "webui"
+
+
+def _save_api_key(cfg, key: str) -> None:
+    """Persist the Anthropic key to the writable .env and make it live on cfg
+    (so the running app can research/produce immediately, no restart)."""
+    key = (key or "").strip()
+    env_path = runtime.user_dir() / ".env"
+    lines = []
+    if env_path.exists():
+        lines = [l for l in env_path.read_text().splitlines()
+                 if not l.strip().startswith("ANTHROPIC_API_KEY")]
+    lines.append(f"ANTHROPIC_API_KEY={key}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="ascii")
+    cfg.anthropic_api_key = key
+    os.environ["ANTHROPIC_API_KEY"] = key
 
 BENCHMARKS = {
     "retention_gate_short_pct": 65.0,
@@ -434,6 +450,10 @@ def make_handler(cfg, ledger_factory):
                 self._json(self._with_ledger(lambda led: pipeline_data(cfg, led)))
             elif path == "/api/jobs":
                 self._json(jobs_snapshot())
+            elif path == "/api/settings":
+                self._json({"has_key": bool(cfg.anthropic_api_key),
+                            "frozen": runtime.is_frozen(),
+                            "channels": [c.name for c in cfg.channels]})
             elif path == "/api/report":
                 name = Path(params.get("name", "")).name  # no traversal
                 f = cfg.data_dir / "reports" / name
@@ -482,7 +502,15 @@ def make_handler(cfg, ledger_factory):
 
         def do_POST(self):
             body = self._body()
-            if self.path == "/api/refresh":
+            if self.path == "/api/settings/key":
+                key = (body.get("key") or "").strip()
+                if not key.startswith("sk-"):
+                    self._json({"error": "that doesn't look like an Anthropic key "
+                                         "(it should start with 'sk-')"}, 400)
+                else:
+                    _save_api_key(cfg, key)
+                    self._json({"ok": True, "has_key": True})
+            elif self.path == "/api/refresh":
                 self._json(self._with_ledger(lambda led: refresh(cfg, led)))
             elif self.path == "/api/diagnose":
                 def run():

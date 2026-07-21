@@ -128,7 +128,22 @@
     <h1>⬤ MISSION CONTROL <b>// SHORTS STUDIO</b></h1>
     <div class="sp"></div>
     <button onclick="doRefresh(this)">↻ Pull latest analytics</button>
+    <button class="sm" onclick="openSettings()" title="Settings / API key">⚙</button>
   </header>
+
+  <div id="setup" style="display:none;position:fixed;inset:0;background:rgba(3,5,4,.82);z-index:50;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:460px;width:100%;padding:26px">
+      <h2 style="margin-bottom:6px">Connect your Anthropic API key</h2>
+      <p class="sub" style="margin-bottom:14px">Powers research, scripts and deep analysis. It's saved only on this device and never leaves it. Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a>.</p>
+      <input id="keyInput" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false"
+         style="width:100%;padding:11px 13px;background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--ink);font:14px system-ui;margin-bottom:12px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeSettings()">Later</button>
+        <button class="primary" onclick="saveKey(this)">Save &amp; connect</button>
+      </div>
+      <div id="keyMsg" class="sub" style="margin-top:10px;min-height:16px"></div>
+    </div>
+  </div>
   <nav>
     <a href="#dashboard" data-page="dashboard">Dashboard</a>
     <a href="#analytics" data-page="analytics">Analytics</a>
@@ -454,7 +469,26 @@ function mdRender(md){
   }).join("");
   function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")}
 }
+/* ---------- settings / API key onboarding ---------- */
+async function checkSettings(){
+  if(IS_PREVIEW)return;
+  try{const s=await api("/api/settings"); if(s&&!s.has_key)openSettings(true);}catch(e){}
+}
+function openSettings(force){const el=$("#setup");if(!el)return;el.style.display="flex";
+  const i=$("#keyInput");if(force&&i)i.focus();}
+function closeSettings(){const el=$("#setup");if(el)el.style.display="none";}
+async function saveKey(btn){
+  const inp=$("#keyInput"),msg=$("#keyMsg"),key=(inp.value||"").trim();
+  if(!key){msg.style.color="var(--warn)";msg.textContent="Paste your key first.";return}
+  btn.disabled=true;msg.style.color="var(--ink2)";msg.textContent="Saving…";
+  const r=await act("/api/settings/key",{key});
+  btn.disabled=false;
+  if(r&&r.ok){msg.style.color="var(--accent)";msg.textContent="Connected — you're all set.";inp.value="";setTimeout(closeSettings,900)}
+  else{msg.style.color="var(--bad)";msg.textContent=(r&&r.error)||"Could not save that key."}
+}
+
 route();
+checkSettings();
 window.addEventListener("resize",()=>drawSparks());
 </script>
 </body>

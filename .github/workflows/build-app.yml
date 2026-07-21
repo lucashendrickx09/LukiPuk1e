@@ -1,0 +1,73 @@
+name: Build Windows app
+
+# Builds the one-file Windows desktop app (ShortsStudio.exe) and publishes it to
+# a rolling "app-latest" GitHub Release, so there's always one stable download URL:
+#   https://github.com/<owner>/<repo>/releases/download/app-latest/ShortsStudio.exe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/short-form-video-creator-d02uf9]
+    paths:
+      - 'studio/**'
+      - '.github/workflows/build-app.yml'
+
+permissions:
+  contents: write   # needed to publish the Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt edge-tts pyinstaller
+
+      - name: Fetch bundled ffmpeg (LGPL static build)
+        shell: pwsh
+        run: |
+          $url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_dl -Force
+          New-Item -ItemType Directory -Force -Path ffmpeg | Out-Null
+          Get-ChildItem -Recurse ffmpeg_dl -Include ffmpeg.exe,ffprobe.exe |
+            ForEach-Object { Copy-Item $_.FullName ffmpeg\ }
+          Write-Host "bundled:"; Get-ChildItem ffmpeg
+
+      - name: Build the app
+        run: pyinstaller shortsstudio.spec --noconfirm
+
+      - name: Smoke test (render a sample through the built .exe)
+        run: .\dist\ShortsStudio.exe --selftest
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShortsStudio-windows
+          path: studio/dist/ShortsStudio.exe
+
+      - name: Publish to rolling "app-latest" Release
+        if: github.ref == 'refs/heads/claude/short-form-video-creator-d02uf9'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-latest
+          name: Shorts Studio - desktop app (latest)
+          body: |
+            **Download `ShortsStudio.exe` below and double-click it.**
+
+            No install, no Python, no setup. On first launch it opens the dashboard
+            in your browser and asks for your Anthropic API key (saved only on your PC).
+
+            Built automatically from the latest code on every change.
+          files: studio/dist/ShortsStudio.exe
+          fail_on_unmatched_files: true
