@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<!--
+  Card template rendered by pipeline/visuals.py via Playwright (HTML -> PNG).
+  Placeholders substituted with str.replace before rendering:
+    {{TEXT}}      card text (already HTML-escaped)
+    {{EMOJI}}     scene emoji (may be empty)
+    {{ACCENT}}    accent colour (hex)
+    {{FONTSIZE}}  body font size in px (visuals.py shrinks it for long text)
+  Text lives in the top ~62% of the frame so it never collides with the
+  karaoke captions ffmpeg burns into the lower third.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --accent: {{ACCENT}}; --fs: {{FONTSIZE}}px; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    font-family: "DejaVu Sans", "Noto Sans", "Segoe UI", Arial, sans-serif;
+    color: #f8fafc;
+    background:
+      radial-gradient(1200px 1200px at 50% 22%,
+                      color-mix(in srgb, var(--accent) 55%, #0b1220) 0%,
+                      #0b1220 60%),
+      linear-gradient(160deg, #0b1220 0%, #060912 100%);
+  }
+  /* Content stays in the top portion; lower third is left for captions. */
+  .stage {
+    height: 62%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 90px 96px 0 96px;
+  }
+  .emoji { font-size: 240px; line-height: 1; margin-bottom: 48px;
+           filter: drop-shadow(0 12px 30px rgba(0,0,0,.55)); }
+  .emoji:empty { display: none; }
+  .text {
+    font-size: var(--fs); font-weight: 800; line-height: 1.1;
+    letter-spacing: -1px;
+    text-shadow: 0 6px 26px rgba(0,0,0,.6);
+    max-width: 100%;
+  }
+  .accentbar {
+    margin-top: 56px; width: 200px; height: 12px; border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="emoji">{{EMOJI}}</div>
+    <div class="text">{{TEXT}}</div>
+    <div class="accentbar"></div>
+  </div>
+</body>
+</html>

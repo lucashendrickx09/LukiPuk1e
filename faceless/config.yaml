@@ -1,0 +1,127 @@
+# ==========================================================================
+# Faceless Shorts pipeline configuration
+# Every value here has a sensible default in pipeline/config.py; this file
+# just overrides them. Edit freely.
+# ==========================================================================
+
+# What the channel is about. Used only for your own bookkeeping / prompts.
+niche: "unexplained history mysteries"
+channel_name: "LukiPuk Shorts"
+
+# ---- Video output -------------------------------------------------------
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  # Encoder: "libx264" (CPU, portable, great quality) or "h264_nvenc"
+  # (RTX 4070 hardware encode, much faster). Output is H.264 either way.
+  encoder: "libx264"
+  crf: 19            # libx264 quality (lower = better). Ignored for nvenc.
+  nvenc_cq: 21       # h264_nvenc quality. Ignored for libx264.
+  preset: "medium"   # libx264 preset, or nvenc preset (p1..p7 / "slow" etc.)
+  pixel_format: "yuv420p"
+
+# ---- Ken Burns (zoompan on stills) --------------------------------------
+kenburns:
+  enabled: true
+  # Stills are upscaled to (scale_factor x output) before zoompan so the
+  # motion is sub-pixel smooth instead of jittery.
+  scale_factor: 2.0
+  zoom_max: 1.15      # max zoom reached at the end of a still's screen time
+  # Motion alternates in/out per scene for variety. Set to "in", "out" or
+  # "alternate".
+  direction: "alternate"
+
+# ---- Text-to-speech (Kokoro-82M) ----------------------------------------
+tts:
+  # Kokoro voices: af_heart, af_bella, af_nicole, am_michael, am_adam,
+  # bf_emma, bm_george ... (a=American, b=British; f/m = voice gender)
+  voice: "af_heart"
+  lang_code: "a"      # 'a' American English, 'b' British English
+  speed: 1.0
+  sample_rate: 24000  # Kokoro native rate. Output is 24kHz mono.
+
+# ---- Forced alignment (faster-whisper) ----------------------------------
+align:
+  model: "large-v3"
+  device: "cuda"          # "cuda" for the 4070, "cpu" to fall back
+  compute_type: "float16" # float16 on GPU; use "int8" on CPU
+  language: "en"
+  beam_size: 5
+
+# ---- Visuals ------------------------------------------------------------
+visuals:
+  # If a stock fetch or Flux generation fails (no key, no GPU, no result),
+  # render a card with the scene text instead of aborting the run.
+  fallback_to_card: true
+  # Card rendering (Playwright HTML -> PNG)
+  card:
+    template: "assets/templates/card.html"
+    # Render at 2x then let assemble downscale -> crisp text under Ken Burns.
+    scale: 2
+  # Stock footage (Pexels). Free API key required in env PEXELS_API_KEY.
+  # Pexels is free; this pipeline uses no paid APIs.
+  stock:
+    orientation: "portrait"
+    min_duration: 3        # seconds; prefer clips at least this long
+    per_page: 15
+  # Local image generation (Flux Schnell via diffusers, runs on the 4070)
+  generated:
+    model: "black-forest-labs/FLUX.1-schnell"
+    steps: 4               # schnell is a 4-step distilled model
+    guidance: 0.0
+    # Memory savers so it fits comfortably in 12GB VRAM.
+    enable_cpu_offload: true
+    vae_slicing: true
+
+# ---- Audio mix ----------------------------------------------------------
+audio:
+  music_db: -20.0          # music bed level relative to narration
+  music_fade: 1.0          # seconds of fade in/out on the music bed
+  whoosh_db: -8.0          # SFX level on each cut
+  # Drop asset files here. First matching file (by extension) is used, or
+  # set an explicit filename.
+  music_dir: "assets/music"
+  sfx_dir: "assets/sfx"
+  whoosh_file: ""          # e.g. "whoosh.wav"; empty = first file in sfx_dir
+  music_file: ""           # e.g. "bed.mp3";   empty = first file in music_dir
+  out_sample_rate: 48000
+  out_bitrate: "192k"
+
+# ---- Captions (ASS karaoke) ---------------------------------------------
+captions:
+  enabled: true
+  font: "DejaVu Sans"      # any installed font family (see: fc-list)
+  font_size: 96
+  primary_color: "&H0000F0FF"    # ASS BGR+alpha: highlighted/sung word (yellow)
+  secondary_color: "&H00FFFFFF"  # not-yet-sung word (white)
+  outline_color: "&H00000000"    # black outline
+  outline: 6
+  shadow: 2
+  max_words_per_line: 3    # how many words share one caption line
+  max_gap: 0.6             # start a new line if the pause exceeds this (s)
+  margin_v: 420            # distance from bottom (px) -> lower-third placement
+  uppercase: true
+
+# ---- YouTube upload -----------------------------------------------------
+upload:
+  enabled: false           # run.py skips upload unless this is true or --upload
+  privacy: "private"       # private | unlisted | public
+  category_id: "27"        # 27 = Education. See YouTube category list.
+  self_declared_made_for_kids: false
+  # Synthetic / altered-media disclosure (AI-generated visuals + TTS voice).
+  contains_synthetic_media: true
+  # Appended to the description when disclosure is on (belt-and-suspenders,
+  # in case the API field is not honoured on your channel yet).
+  synthetic_disclosure_text: >-
+    Some sounds or visuals in this video were digitally generated or altered.
+  # OAuth: client secrets JSON + a cached token. Get these from Google Cloud
+  # Console (YouTube Data API v3, OAuth desktop client).
+  client_secrets: "client_secret.json"
+  token_file: "youtube_token.json"
+
+# ---- Paths --------------------------------------------------------------
+paths:
+  scripts: "scripts.json"
+  state_db: "state.db"
+  work: "work"

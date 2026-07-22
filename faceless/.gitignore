@@ -1,0 +1,30 @@
+# Faceless pipeline — runtime + secrets (do not commit)
+
+# Per-video working files and rendered videos
+work/
+
+# State DB
+state.db
+*.db-journal
+*.db-wal
+
+# Model / stage caches
+.cache/
+
+# Secrets & OAuth
+client_secret*.json
+youtube_token.json
+*.token.json
+.env
+
+# User-supplied media (drop your own; keep the folders)
+assets/music/*
+assets/sfx/*
+!assets/music/.gitkeep
+!assets/sfx/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

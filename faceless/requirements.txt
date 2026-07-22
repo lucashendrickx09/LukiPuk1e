@@ -1,0 +1,31 @@
+# Core (always needed)
+PyYAML>=6.0
+
+# Stage: tts  (Kokoro-82M — small local model, no API)
+kokoro>=0.9.4
+soundfile>=0.12          # optional; tts.py falls back to stdlib wave writer
+numpy>=1.24
+
+# Stage: align  (faster-whisper large-v3 on the GPU)
+faster-whisper>=1.0.0
+
+# Stage: visuals
+#   card      -> Playwright (run `playwright install chromium` once)
+#   stock     -> requests (Pexels free API; set PEXELS_API_KEY)
+#   generated -> Flux Schnell via diffusers (CUDA)
+playwright>=1.44
+requests>=2.31
+# For the "generated" scene type on the RTX 4070:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+diffusers>=0.30
+transformers>=4.43
+accelerate>=0.33
+sentencepiece>=0.2
+protobuf>=4.25
+
+# Stage: upload  (YouTube Data API v3)
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2
+google-auth>=2.30
+
+# ffmpeg + ffprobe must be installed separately and on PATH.

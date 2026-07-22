@@ -1,0 +1,44 @@
+[
+  {
+    "title": "The Lighthouse Keepers Who Vanished",
+    "hook": "Three men vanished from a locked lighthouse — and the log book made it worse.",
+    "beats": [
+      "In 1900, a relief boat reached the Flannan Isles lighthouse off Scotland.",
+      "The lamp was out. The door was shut. All three keepers were gone.",
+      "Inside, a meal sat unfinished and a chair lay knocked over.",
+      "The log described a storm so violent one man was found weeping — yet the sea outside had been calm."
+    ],
+    "payoff": "No storm was ever recorded that week. The keepers were never found.",
+    "loop_line": "So what were they writing about?",
+    "scenes": [
+      {
+        "type": "card",
+        "text": "Three men vanished from a locked lighthouse",
+        "emoji": "🗼",
+        "query_or_prompt": ""
+      },
+      {
+        "type": "stock",
+        "text": "A relief boat reached the remote Scottish island at dawn",
+        "emoji": "🌊",
+        "query_or_prompt": "stormy lighthouse ocean cliffs"
+      },
+      {
+        "type": "generated",
+        "text": "Inside, a meal sat unfinished and a chair lay overturned",
+        "emoji": "🕯️",
+        "query_or_prompt": "dim lighthouse interior, overturned wooden chair, unfinished meal on table, candlelight, eerie, cinematic, vertical"
+      },
+      {
+        "type": "card",
+        "text": "No storm was ever recorded that week",
+        "emoji": "❓",
+        "query_or_prompt": ""
+      }
+    ],
+    "yt_title": "The Lighthouse Keepers Who Vanished Without a Trace 🗼",
+    "description": "Three keepers. One locked lighthouse. Zero explanations. The Flannan Isles mystery still has no answer.\n\n#shorts #history #mystery #unexplained",
+    "tags": ["shorts", "history", "mystery", "unexplained", "flannan isles", "lighthouse"],
+    "pinned_comment": "The log entry nobody can explain: a storm that the calm sea never had. What do you think happened?"
+  }
+]
