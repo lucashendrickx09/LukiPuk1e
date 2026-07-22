@@ -21,6 +21,10 @@ from types import SimpleNamespace
 _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/122.0 Safari/537.36")
 
+# Output-token ceiling. Small on purpose: our outputs are tiny and a large
+# reservation burns free-tier per-minute token budgets (e.g. Groq's 12k TPM).
+_MAX_OUTPUT_TOKENS = 3072
+
 # provider -> endpoint + a sensible free/default model + where to get a key
 PROVIDERS = {
     "anthropic": {
@@ -113,10 +117,12 @@ class OpenAICompatClient:
             chat.append({"role": m.get("role", "user"), "content": content or ""})
 
         body = {"model": kwargs.get("model") or self.model, "messages": chat}
-        # cap to a value every common free model accepts (Gemini Flash = 8192);
-        # our outputs (scripts, idea lists, reports) are far smaller than this
-        req_max = int(kwargs.get("max_tokens") or 4096)
-        body["max_tokens"] = min(req_max, 8192)
+        # Reserve only a modest output budget. Our outputs are small (a full
+        # script is ~450 tokens; idea lists and reports a few thousand), and a
+        # big reservation eats free-tier per-minute token budgets (Groq caps at
+        # 12k TPM) — the app sent 8192, which alone tripped the rate limit.
+        req_max = int(kwargs.get("max_tokens") or 3072)
+        body["max_tokens"] = min(req_max, _MAX_OUTPUT_TOKENS)
 
         if want_json:
             body["response_format"] = {"type": "json_object"}
