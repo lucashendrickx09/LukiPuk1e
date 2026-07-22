@@ -16,6 +16,11 @@ import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
+# A browser-style UA: some providers (Groq) sit behind Cloudflare, which blocks
+# the default "Python-urllib" user-agent with a 403 "error code: 1010".
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/122.0 Safari/537.36")
+
 # provider -> endpoint + a sensible free/default model + where to get a key
 PROVIDERS = {
     "anthropic": {
@@ -131,7 +136,7 @@ class OpenAICompatClient:
             self.base_url + "/chat/completions",
             data=json.dumps(body).encode(),
             headers={"Authorization": f"Bearer {self.api_key}",
-                     "Content-Type": "application/json"},
+                     "Content-Type": "application/json", "User-Agent": _UA},
             method="POST")
         try:
             with urllib.request.urlopen(req, timeout=120) as r:
