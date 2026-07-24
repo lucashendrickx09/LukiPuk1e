@@ -12,7 +12,7 @@ import {
 import { THESIS_MODELS } from '@/api/anthropic';
 import { Card, SectionTitle } from '@/components/ui';
 import { KEYS, setSecret } from '@/lib/secure';
-import { notificationPermission, requestNotificationPermission } from '@/lib/deviceNotify';
+import { NotificationSetup } from '@/components/NotificationSetup';
 import { useCatalog } from '@/store/catalog';
 import { useDeck } from '@/store/deck';
 import { usePortfolio } from '@/store/portfolio';
@@ -107,7 +107,6 @@ function KeyField({
 
 export default function SettingsScreen() {
   const settings = useSettings();
-  const [perm, setPerm] = useState(notificationPermission());
   const clearDeck = useDeck((s) => s.clearDeck);
   const resetPersonalization = useCatalog((s) => s.resetPersonalization);
   const clearCatalog = useCatalog((s) => s.clearAll);
@@ -186,27 +185,8 @@ export default function SettingsScreen() {
       </Card>
 
       <SectionTitle>Notifications</SectionTitle>
+      <NotificationSetup />
       <Card>
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={{ color: colors.text, fontSize: 14 }}>Device notifications</Text>
-            <Text style={styles.note}>
-              {perm === 'granted'
-                ? 'Enabled — alerts pop up on this device while the app is open.'
-                : perm === 'unsupported'
-                  ? 'Add the app to your home screen to allow device alerts (or use a native build).'
-                  : 'Allow pop-up alerts for the items below.'}
-            </Text>
-          </View>
-          {perm !== 'granted' && perm !== 'unsupported' ? (
-            <TouchableOpacity
-              style={styles.enableBtn}
-              onPress={async () => setPerm(await requestNotificationPermission())}>
-              <Text style={{ color: '#08111E', fontWeight: '800' }}>Enable</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
         {(
           [
             ['Daily feed ready', 'notifyDeckReady'],

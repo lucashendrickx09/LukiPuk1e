@@ -43,6 +43,7 @@ export default function RootLayout() {
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="company/[symbol]" options={{ title: 'Company' }} />
+        <Stack.Screen name="holding/[symbol]" options={{ title: 'Holding' }} />
         <Stack.Screen name="folder/[id]" options={{ title: 'Folder' }} />
         <Stack.Screen name="alerts" options={{ title: 'Alerts' }} />
         <Stack.Screen name="analytics" options={{ title: 'Analytics' }} />

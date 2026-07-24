@@ -126,4 +126,6 @@ export interface NotificationItem extends NotificationDraft {
   id: string;
   createdAt: string;
   read: boolean;
+  /** True once the OS actually displayed it (see store deliverPending). */
+  delivered?: boolean;
 }

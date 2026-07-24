@@ -2,6 +2,8 @@ import { router, Stack } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, Chip, EmptyState } from '@/components/ui';
+import { NotificationSetup } from '@/components/NotificationSetup';
+import { notificationPermission } from '@/lib/deviceNotify';
 import { useNotifications } from '@/store/notifications';
 import { colors, spacing } from '@/theme';
 import { NotificationItem } from '@/types';
@@ -47,6 +49,7 @@ export default function AlertsScreen() {
         }}
       />
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, flexGrow: 1 }}>
+        {notificationPermission() !== 'granted' ? <NotificationSetup compact /> : null}
         {items.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <EmptyState

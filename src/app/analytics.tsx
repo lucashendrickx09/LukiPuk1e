@@ -9,11 +9,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useWindowDimensions } from 'react-native';
+import {
+  BarChart,
+  CompareBars,
+  CorrelationHeatmap,
+  Donut,
+  DonutLegend,
+  DrawdownChart,
+  HBar,
+  LineChart,
+} from '@/components/charts';
 import { Card, EmptyState, SectionTitle } from '@/components/ui';
 import { useAnalytics } from '@/store/analytics';
 import { usePortfolio } from '@/store/portfolio';
 import { colors, spacing } from '@/theme';
-import { fmtPct } from '@/utils/format';
+import { fmtMoney, fmtPct } from '@/utils/format';
 
 // Plain-English explanation for each metric (shown in the tap-through sheet).
 const EXPL: Record<string, string> = {
@@ -52,6 +63,8 @@ function ratio(n: number): string {
 }
 
 export default function AnalyticsScreen() {
+  const { width } = useWindowDimensions();
+  const chartW = width - spacing.lg * 4;
   const positions = usePortfolio((s) => s.positions);
   const result = useAnalytics((s) => s.result);
   const computing = useAnalytics((s) => s.computing);
@@ -130,6 +143,118 @@ export default function AnalyticsScreen() {
         <Text style={styles.intro}>Tap any metric for what it means and how to read your number.</Text>
         {computing ? <Text style={styles.updating}>Updating with the latest data…</Text> : null}
 
+        {/* Growth of your money vs the market */}
+        {r.equityCurve.length > 2 ? (
+          <>
+            <SectionTitle>Growth</SectionTitle>
+            <Card>
+              <Text style={styles.chartCaption}>
+                Your portfolio, indexed to 1.00 over the last {r.windowDays} trading days
+              </Text>
+              <LineChart values={r.equityCurve} width={chartW} height={160} />
+              {r.benchEquityCurve.length > 2 ? (
+                <View style={{ marginTop: spacing.md }}>
+                  <Text style={styles.chartCaption}>S&P 500 (SPY), same window</Text>
+                  <LineChart values={r.benchEquityCurve} width={chartW} height={110} />
+                </View>
+              ) : null}
+            </Card>
+          </>
+        ) : null}
+
+        {/* Monthly returns */}
+        {r.monthlyReturns.length > 1 ? (
+          <>
+            <SectionTitle>Monthly returns</SectionTitle>
+            <Card>
+              <BarChart data={r.monthlyReturns} width={chartW} height={140} />
+              <Text style={styles.note}>
+                Green months gained, red months lost. Best {fmtPct(Math.max(...r.monthlyReturns.map((m) => m.value)))},
+                worst {fmtPct(Math.min(...r.monthlyReturns.map((m) => m.value)))}.
+              </Text>
+            </Card>
+          </>
+        ) : null}
+
+        {/* Drawdown */}
+        {r.drawdownSeries.length > 2 ? (
+          <>
+            <SectionTitle>Drawdown</SectionTitle>
+            <Card>
+              <Text style={styles.chartCaption}>
+                How far below your running peak you were, day by day
+              </Text>
+              <DrawdownChart values={r.drawdownSeries} width={chartW} height={120} />
+              <Text style={styles.note}>
+                Deepest drop {fmtPct(r.maxDrawdownPct)}
+                {r.benchMaxDrawdownPct ? ` · S&P 500 ${fmtPct(r.benchMaxDrawdownPct)}` : ''}.
+              </Text>
+            </Card>
+          </>
+        ) : null}
+
+        {/* vs benchmark */}
+        {r.hasHistory && r.benchEquityCurve.length > 2 ? (
+          <>
+            <SectionTitle>You vs the market</SectionTitle>
+            <Card>
+              <CompareBars
+                width={chartW}
+                rows={[
+                  { label: 'Annualised return', a: r.annReturnPct, b: r.benchAnnReturnPct, format: (n) => fmtPct(n) },
+                  { label: 'Volatility', a: r.annVolPct, b: r.benchAnnVolPct, format: (n) => fmtPct(n, false) },
+                  { label: 'Max drawdown', a: r.maxDrawdownPct, b: r.benchMaxDrawdownPct, format: (n) => fmtPct(n) },
+                ]}
+              />
+              <Text style={styles.note}>Blue = your portfolio · grey = S&P 500.</Text>
+            </Card>
+          </>
+        ) : null}
+
+        {/* Who drove the P/L */}
+        {r.contributors.length > 0 ? (
+          <>
+            <SectionTitle>What drove your P/L</SectionTitle>
+            <Card>
+              {r.contributors.slice(0, 10).map((c) => (
+                <HBar
+                  key={c.symbol}
+                  label={c.symbol}
+                  value={c.pl}
+                  maxAbs={Math.max(...r.contributors.map((x) => Math.abs(x.pl)), 1)}
+                  suffix={fmtMoney(c.pl, 0)}
+                />
+              ))}
+            </Card>
+          </>
+        ) : null}
+
+        {/* Allocation breakdowns */}
+        <SectionTitle>Breakdown</SectionTitle>
+        <Card>
+          <Text style={styles.chartCaption}>By sector</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <Donut slices={r.sectorWeights.slice(0, 8)} />
+            <DonutLegend slices={r.sectorWeights.slice(0, 8)} />
+          </View>
+        </Card>
+        {r.capWeights.some((c) => c.label !== 'Unclassified') ? (
+          <Card>
+            <Text style={styles.chartCaption}>By company size</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+              <Donut slices={r.capWeights} />
+              <DonutLegend slices={r.capWeights} />
+            </View>
+          </Card>
+        ) : null}
+        <Card>
+          <Text style={styles.chartCaption}>By position</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <Donut slices={r.positionWeights.slice(0, 8)} />
+            <DonutLegend slices={r.positionWeights.slice(0, 8)} />
+          </View>
+        </Card>
+
         <SectionTitle>Risk-adjusted return</SectionTitle>
         <Card>
           {r.hasHistory ? (
@@ -196,6 +321,22 @@ export default function AnalyticsScreen() {
           <>
             <SectionTitle>Correlation</SectionTitle>
             <Card>
+              {r.corrSymbols.length > 1 ? (
+                <View style={{ marginBottom: spacing.md }}>
+                  <CorrelationHeatmap
+                    symbols={r.corrSymbols}
+                    width={chartW}
+                    valueFor={(a, b) =>
+                      r.correlations.find(
+                        (c) => (c.a === a && c.b === b) || (c.a === b && c.b === a),
+                      )?.value ?? null
+                    }
+                  />
+                  <Text style={styles.note}>
+                    Green = moves independently · red = moves together (less diversification).
+                  </Text>
+                </View>
+              ) : null}
               <Text style={styles.note}>
                 How your top holdings move together (-1 opposite, +1 identical). Lower is better
                 diversification.
@@ -261,6 +402,7 @@ const styles = StyleSheet.create({
   status: { color: colors.text, fontSize: 14, fontWeight: '600' },
   statusSub: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
   intro: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
+  chartCaption: { color: colors.muted, fontSize: 12, marginBottom: spacing.sm },
   updating: { color: colors.blue, fontSize: 12, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',

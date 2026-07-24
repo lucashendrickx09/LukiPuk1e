@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { DEFAULT_THESIS_MODEL } from '@/api/anthropic';
+import { SortKey } from '@/lib/holdings';
 
 export type StyleLean = 'longterm' | 'balanced' | 'momentum';
 
@@ -18,6 +19,8 @@ interface SettingsState {
   // SecureStore (see lib/secure.ts), never in this persisted store.
   hasFinnhubKey: boolean;
   hasAnthropicKey: boolean;
+  /** Portfolio holdings sort order. */
+  sortKey: SortKey;
   set: (partial: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -34,6 +37,7 @@ export const useSettings = create<SettingsState>()(
       notifyMarket: true,
       hasFinnhubKey: false,
       hasAnthropicKey: false,
+      sortKey: 'value',
       set: (partial) => set(partial),
     }),
     { name: 'stockpile.settings', storage: createJSONStorage(() => AsyncStorage) },

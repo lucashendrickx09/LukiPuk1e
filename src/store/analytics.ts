@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { fetchMetrics } from '@/api/finnhub';
 import { fetchDailyCandles } from '@/api/stooq';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
+import { capTierOf } from '@/utils/format';
 import { AnalyticsResult, computeAnalytics } from '@/engine/analytics';
 import { getSecret, KEYS } from '@/lib/secure';
 import { Candle, KeyMetrics } from '@/types';
@@ -81,6 +82,10 @@ export const useAnalytics = create<AnalyticsState>()(
             quotes: useMarket.getState().quotes,
             metricsBySymbol,
             sectorOf,
+            capTierOf: (sym) => {
+              const capM = profiles[sym]?.marketCapM ?? 0;
+              return capM > 0 ? capTierOf(capM) : 'Unclassified';
+            },
             candlesBySymbol,
             benchmark,
           });

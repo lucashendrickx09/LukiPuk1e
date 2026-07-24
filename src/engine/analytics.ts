@@ -5,6 +5,8 @@ import { Candle, KeyMetrics, Position, Quote } from '@/types';
 // when those aren't available the result flags it so the UI can degrade
 // gracefully. Beta/valuation come from per-stock fundamentals (no history).
 
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 const RF = 0.04; // assumed annual risk-free rate
 const TRADING_DAYS = 252;
 
@@ -81,6 +83,19 @@ export interface AnalyticsResult {
   informationRatio: number;
   // correlations among holdings
   correlations: CorrCell[];
+  corrSymbols: string[];
+  // --- visual series ---
+  monthlyReturns: { label: string; value: number }[]; // % per calendar month
+  drawdownSeries: number[]; // % below running peak, <= 0
+  equityCurve: number[]; // growth of 1 unit over the window
+  benchEquityCurve: number[]; // benchmark, same window
+  benchAnnReturnPct: number;
+  benchAnnVolPct: number;
+  benchMaxDrawdownPct: number;
+  contributors: { symbol: string; pl: number; sharePct: number }[]; // P/L attribution
+  sectorWeights: { label: string; value: number }[];
+  capWeights: { label: string; value: number }[];
+  positionWeights: { label: string; value: number }[];
 }
 
 export function computeAnalytics(args: {
@@ -88,18 +103,27 @@ export function computeAnalytics(args: {
   quotes: Record<string, Quote>;
   metricsBySymbol: Record<string, KeyMetrics>;
   sectorOf: (symbol: string) => string;
+  /** Market-cap tier per symbol, for the cap-size breakdown. */
+  capTierOf?: (symbol: string) => string;
   candlesBySymbol: Record<string, Candle[]>;
   benchmark: Candle[] | null;
 }): AnalyticsResult {
   const { positions, quotes, metricsBySymbol, sectorOf, candlesBySymbol, benchmark } = args;
+  const capTierLabelFor = args.capTierOf ?? (() => 'Unclassified');
   const priceOf = (p: Position) => quotes[p.symbol]?.price ?? p.buyPrice;
 
-  const rows = positions.map((p) => ({
-    symbol: p.symbol,
-    value: p.shares * priceOf(p),
-    cost: p.shares * p.buyPrice,
-    dayChange: p.shares * (quotes[p.symbol]?.change ?? 0),
-  }));
+  // Positions are stored as individual lots; collapse them to one row per
+  // symbol first. Keying by symbol without this would overwrite duplicate lots
+  // (wrong weights/HHI) and double-count them in the return series.
+  const bySymbol = new Map<string, { symbol: string; value: number; cost: number; dayChange: number }>();
+  for (const p of positions) {
+    const row = bySymbol.get(p.symbol) ?? { symbol: p.symbol, value: 0, cost: 0, dayChange: 0 };
+    row.value += p.shares * priceOf(p);
+    row.cost += p.shares * p.buyPrice;
+    row.dayChange += p.shares * (quotes[p.symbol]?.change ?? 0);
+    bySymbol.set(p.symbol, row);
+  }
+  const rows = [...bySymbol.values()];
   const totalValue = rows.reduce((s, r) => s + r.value, 0);
   const totalCost = rows.reduce((s, r) => s + r.cost, 0);
   const dayChange = rows.reduce((s, r) => s + r.dayChange, 0);
@@ -137,8 +161,13 @@ export function computeAnalytics(args: {
   const weightedDivYield = wAvg((m) => m.dividendYield);
 
   // History-based portfolio daily returns (current-weight approximation)
-  const series = positions
-    .map((p) => ({ w: weights.get(p.symbol) ?? 0, r: candlesBySymbol[p.symbol] ? dailyReturns(candlesBySymbol[p.symbol]) : new Map<string, number>() }))
+  const series = rows
+    .map((row) => ({
+      w: weights.get(row.symbol) ?? 0,
+      r: candlesBySymbol[row.symbol]
+        ? dailyReturns(candlesBySymbol[row.symbol])
+        : new Map<string, number>(),
+    }))
     .filter((s) => s.r.size > 0 && s.w > 0);
 
   let portByDate: { date: string; r: number }[] = [];
@@ -210,7 +239,100 @@ export function computeAnalytics(args: {
     }
   }
 
+  // ---- visual series -------------------------------------------------
+  // Equity curve + drawdown path from the portfolio's daily returns.
+  const equityCurve: number[] = [];
+  const drawdownSeries: number[] = [];
+  {
+    let c = 1;
+    let pk = 1;
+    for (const r of portRet) {
+      c *= 1 + r;
+      pk = Math.max(pk, c);
+      equityCurve.push(c);
+      drawdownSeries.push(pk > 0 ? ((c - pk) / pk) * 100 : 0);
+    }
+  }
+
+  // Calendar-month returns for the bar chart.
+  const monthAgg = new Map<string, number>();
+  for (const { date, r } of portByDate) {
+    const m = date.slice(0, 7);
+    monthAgg.set(m, (monthAgg.get(m) ?? 1) * (1 + r));
+  }
+  const monthlyReturns = [...monthAgg.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-8)
+    .map(([m, growth]) => ({
+      label: MONTH_LABELS[parseInt(m.slice(5, 7), 10) - 1] ?? m.slice(5, 7),
+      value: (growth - 1) * 100,
+    }));
+
+  // Benchmark stats + curve over the same window.
+  let benchEquityCurve: number[] = [];
+  let benchAnnReturnPct = 0;
+  let benchAnnVolPct = 0;
+  let benchMaxDrawdownPct = 0;
+  if (benchmark) {
+    const bRet = dailyReturns(benchmark);
+    const dates = portByDate.filter((x) => bRet.has(x.date)).map((x) => x.date);
+    const b = dates.map((d) => bRet.get(d) as number);
+    if (b.length >= 2) {
+      benchAnnReturnPct = mean(b) * TRADING_DAYS * 100;
+      benchAnnVolPct = std(b) * Math.sqrt(TRADING_DAYS) * 100;
+      let c = 1;
+      let pk = 1;
+      let dd = 0;
+      for (const r of b) {
+        c *= 1 + r;
+        pk = Math.max(pk, c);
+        dd = Math.min(dd, (c - pk) / pk);
+        benchEquityCurve.push(c);
+      }
+      benchMaxDrawdownPct = dd * 100;
+    }
+  }
+
+  // P/L attribution — who actually drove the gains.
+  const totalAbsPl = rows.reduce((s, r) => s + Math.abs(r.value - r.cost), 0) || 1;
+  const contributors = rows
+    .map((r) => ({
+      symbol: r.symbol,
+      pl: r.value - r.cost,
+      sharePct: (Math.abs(r.value - r.cost) / totalAbsPl) * 100,
+    }))
+    .sort((a, b) => b.pl - a.pl);
+
+  const sectorWeights = [...sectorW.entries()]
+    .map(([label, w]) => ({ label, value: w * 100 }))
+    .sort((a, b) => b.value - a.value);
+
+  const capBuckets = new Map<string, number>();
+  for (const [sym, w] of weights) {
+    const tier = capTierLabelFor(sym);
+    capBuckets.set(tier, (capBuckets.get(tier) ?? 0) + w * 100);
+  }
+  const capWeights = [...capBuckets.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const positionWeights = [...weights.entries()]
+    .map(([label, w]) => ({ label, value: w * 100 }))
+    .sort((a, b) => b.value - a.value);
+
   return {
+    monthlyReturns,
+    drawdownSeries,
+    equityCurve,
+    benchEquityCurve,
+    benchAnnReturnPct,
+    benchAnnVolPct,
+    benchMaxDrawdownPct,
+    contributors,
+    sectorWeights,
+    capWeights,
+    positionWeights,
+    corrSymbols: topSyms,
     totalValue,
     totalPlPct,
     dayPct,

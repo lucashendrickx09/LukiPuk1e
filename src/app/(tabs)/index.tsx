@@ -14,6 +14,7 @@ import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/cha
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
+import { buildHoldings, SORT_OPTIONS, sortHoldings } from '@/lib/holdings';
 import { useAnalytics } from '@/store/analytics';
 import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
@@ -32,7 +33,7 @@ const sevColor = (s: Recommendation['severity']) =>
 export default function PortfolioScreen() {
   const { width } = useWindowDimensions();
   const positions = usePortfolio((s) => s.positions);
-  const removePosition = usePortfolio((s) => s.removePosition);
+  const removeSymbol = usePortfolio((s) => s.removeSymbol);
   const loadSample = usePortfolio((s) => s.loadSamplePortfolio);
   const quotes = useMarket((s) => s.quotes);
   const profiles = useMarket((s) => s.profiles);
@@ -58,7 +59,11 @@ export default function PortfolioScreen() {
   // background so the Analytics screen opens instantly (both are staleness-throttled).
   useFocusEffect(
     useCallback(() => {
-      useNotifications.getState().scan();
+      useNotifications.getState().scan().then(() => {
+        // Push anything generated today that the OS hasn't shown yet (e.g. the
+        // user granted permission after the alerts were created).
+        useNotifications.getState().deliverPending();
+      });
       useAnalytics.getState().compute();
     }, []),
   );
@@ -88,6 +93,16 @@ export default function PortfolioScreen() {
 
   const sectorOf = (symbol: string) =>
     profiles[symbol]?.sector ?? UNIVERSE_BY_SYMBOL.get(symbol)?.fallbackSector ?? 'Other';
+
+  const sortKey = useSettings((s) => s.sortKey);
+  const setSettings = useSettings((s) => s.set);
+
+  // One row per symbol (lots aggregated), then ordered by the chosen sort.
+  const holdings = useMemo(
+    () => buildHoldings({ positions, quotes, profiles }),
+    [positions, quotes, profiles],
+  );
+  const sortedHoldings = useMemo(() => sortHoldings(holdings, sortKey), [holdings, sortKey]);
 
   const catalogEntries = useCatalog((s) => s.entries);
   const recs = useMemo(
@@ -238,41 +253,64 @@ export default function PortfolioScreen() {
           </TouchableOpacity>
         </View>
       </View>
-      {positions.map((p) => {
-        const price = priceOf(p);
-        const pl = ((price - p.buyPrice) / p.buyPrice) * 100;
-        return (
-          <TouchableOpacity
-            key={p.id}
-            onLongPress={() =>
-              Alert.alert('Remove position', `Remove ${p.symbol} from your portfolio?`, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Remove', style: 'destructive', onPress: () => removePosition(p.id) },
-              ])
-            }>
-            <Card style={{ marginBottom: spacing.sm }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                <Logo uri={profiles[p.symbol]?.logo} symbol={p.symbol} size={38} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>
-                    {p.symbol}
-                  </Text>
-                  <Text style={{ color: colors.faint, fontSize: 12 }} numberOfLines={1}>
-                    {p.shares} × {fmtMoney(price)} · {sectorOf(p.symbol)}
-                  </Text>
-                </View>
-                <Sparkline values={(candles[p.symbol] ?? []).slice(-30).map((c) => c.close)} />
-                <View style={{ alignItems: 'flex-end', minWidth: 76 }}>
-                  <Text style={{ color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
-                    {fmtMoney(p.shares * price, 0)}
-                  </Text>
-                  <PctText value={pl} size={12} />
-                </View>
+
+      {/* Sort by */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+        {SORT_OPTIONS.map((opt) => {
+          const active = opt.key === sortKey;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => setSettings({ sortKey: opt.key })}
+              style={[styles.sortChip, active && styles.sortChipActive]}>
+              <Text style={[styles.sortChipTxt, active && styles.sortChipTxtActive]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {sortedHoldings.map((h) => (
+        <TouchableOpacity
+          key={h.symbol}
+          activeOpacity={0.7}
+          onPress={() => router.push(`/holding/${h.symbol}`)}
+          onLongPress={() =>
+            Alert.alert(h.symbol, `Remove ${h.symbol} from your portfolio?`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: () => removeSymbol(h.symbol),
+              },
+            ])
+          }>
+          <Card style={{ marginBottom: spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <Logo uri={profiles[h.symbol]?.logo} symbol={h.symbol} size={38} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 15 }}>
+                  {h.symbol}
+                </Text>
+                <Text style={{ color: colors.faint, fontSize: 12 }} numberOfLines={1}>
+                  {h.shares} × {fmtMoney(h.price)} · {h.sector}
+                </Text>
               </View>
-            </Card>
-          </TouchableOpacity>
-        );
-      })}
+              <Sparkline values={(candles[h.symbol] ?? []).slice(-30).map((c) => c.close)} />
+              <View style={{ alignItems: 'flex-end', minWidth: 76 }}>
+                <Text style={{ color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+                  {fmtMoney(h.value, 0)}
+                </Text>
+                <PctText value={h.plPct} size={12} />
+              </View>
+            </View>
+          </Card>
+        </TouchableOpacity>
+      ))}
 
       <SectionTitle>Allocation by industry</SectionTitle>
       <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.8}>
@@ -312,6 +350,17 @@ const styles = StyleSheet.create({
   totalValue: { color: colors.text, fontSize: 34, fontWeight: '800', marginTop: 2, fontVariant: ['tabular-nums'] },
   cardTitle: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
   tapHint: { color: colors.blue, fontSize: 12, fontWeight: '600' },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortChipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  sortChipTxt: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  sortChipTxtActive: { color: '#08111E' },
   analyticsRow: { flexDirection: 'row', alignItems: 'center' },
   analyticsTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
   analyticsSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
