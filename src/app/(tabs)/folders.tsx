@@ -19,6 +19,26 @@ export default function FoldersScreen() {
   const logoFor = (symbol: string) =>
     entries.find((e) => e.card.symbol === symbol)?.card.profile.logo;
 
+  const manage = (f: Folder) =>
+    Alert.alert(f.name, `${f.symbols.length} stock${f.symbols.length === 1 ? '' : 's'}`, [
+      { text: 'Open', onPress: () => router.push(`/folder/${f.id}`) },
+      { text: 'Rename', onPress: () => setRenaming(f) },
+      {
+        text: 'Delete folder',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert(
+            `Delete “${f.name}”`,
+            'The folder is removed. The companies stay in your catalog.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => deleteFolder(f.id) },
+            ],
+          ),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48 }}>
       <TouchableOpacity style={styles.newBtn} onPress={() => setCreating(true)}>
@@ -28,30 +48,25 @@ export default function FoldersScreen() {
       {folders.length === 0 ? (
         <EmptyState
           title="No folders yet"
-          body="Group catalogued stocks into folders — e.g. 'AI', 'Dividends', 'Watch closely'. Create one here, then long-press a stock in the Catalog to add it."
+          body="Group catalogued stocks into folders — e.g. 'AI', 'Dividends', 'Watch closely'. Create one here, or drag one company onto another in the Catalog."
         />
       ) : (
         folders.map((f) => (
           <TouchableOpacity
             key={f.id}
             onPress={() => router.push(`/folder/${f.id}`)}
-            onLongPress={() =>
-              Alert.alert(f.name, 'Manage folder', [
-                { text: 'Rename', onPress: () => setRenaming(f) },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: () => deleteFolder(f.id),
-                },
-                { text: 'Cancel', style: 'cancel' },
-              ])
-            }>
+            onLongPress={() => manage(f)}>
             <Card style={{ marginBottom: spacing.sm }}>
               <View style={styles.headerRow}>
                 <Text style={styles.name}>{f.name}</Text>
-                <Text style={styles.count}>
-                  {f.symbols.length} stock{f.symbols.length === 1 ? '' : 's'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                  <Text style={styles.count}>
+                    {f.symbols.length} stock{f.symbols.length === 1 ? '' : 's'}
+                  </Text>
+                  <TouchableOpacity onPress={() => manage(f)} hitSlop={12} style={styles.menuBtn}>
+                    <Text style={styles.menuBtnTxt}>•••</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {f.symbols.length > 0 ? (
                 <View style={styles.logoRow}>
@@ -105,5 +120,7 @@ const styles = StyleSheet.create({
   count: { color: colors.faint, fontSize: 12 },
   logoRow: { flexDirection: 'row', gap: 6, marginTop: spacing.md, flexWrap: 'wrap', alignItems: 'center' },
   more: { color: colors.muted, fontSize: 12, fontWeight: '600', alignSelf: 'center' },
+  menuBtn: { paddingHorizontal: 6, paddingVertical: 2 },
+  menuBtnTxt: { color: colors.blue, fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   empty: { color: colors.faint, fontSize: 12, marginTop: spacing.sm },
 });
