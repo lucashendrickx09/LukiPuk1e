@@ -47,6 +47,40 @@ body {
   -webkit-font-smoothing: antialiased;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+
+/* Make it behave like an app, not a web page.
+   Without these, iOS Safari hijacks a long press on any image with its native
+   callout menu (Share / Save to Photos / Copy), which stole the drag gesture on
+   the catalog tiles. Text selection and native image dragging are suppressed
+   for the same reason; inputs opt back in below. */
+* {
+  -webkit-touch-callout: none;
+}
+body, #root {
+  -webkit-user-select: none;
+  user-select: none;
+}
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+
+/* Draggable grid tiles: the touch must reach the tile view, never the <img>,
+   and the tile itself must not be text-selectable mid-drag. */
+[data-tile="true"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+[data-tile="true"] img {
+  pointer-events: none;
+}
 `;
 
 // Exposes the base path to runtime code and registers the notification SW.

@@ -18,6 +18,11 @@ import { Logo } from './ui';
 
 export const COLUMNS = 4;
 
+// react-native-web renders `dataSet` as data-* attributes; global CSS uses
+// [data-tile="true"] to kill iOS's long-press image callout (Share / Save to
+// Photos), which otherwise steals the drag gesture. Not typed in RN core.
+const tileDataProps = { dataSet: { tile: 'true' } } as unknown as Record<string, unknown>;
+
 export type GridItem =
   | { kind: 'stock'; key: string; entry: CatalogEntry }
   | { kind: 'folder'; key: string; folder: Folder };
@@ -160,6 +165,7 @@ export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, on
         return (
           <Animated.View
             key={item.key}
+            {...tileDataProps}
             {...responders[index].panHandlers}
             style={[
               style,
