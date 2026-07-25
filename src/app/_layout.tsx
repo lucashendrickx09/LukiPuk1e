@@ -45,6 +45,7 @@ export default function RootLayout() {
         <Stack.Screen name="company/[symbol]" options={{ title: 'Company' }} />
         <Stack.Screen name="holding/[symbol]" options={{ title: 'Holding' }} />
         <Stack.Screen name="folder/[id]" options={{ title: 'Folder' }} />
+        <Stack.Screen name="research/[symbol]" options={{ title: 'Deep research' }} />
         <Stack.Screen name="alerts" options={{ title: 'Alerts' }} />
         <Stack.Screen name="analytics" options={{ title: 'Analytics' }} />
         <Stack.Screen

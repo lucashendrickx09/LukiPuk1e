@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { DEFAULT_THESIS_MODEL } from '@/api/anthropic';
+import { DEFAULT_THESIS_MODEL, THESIS_MODELS } from '@/api/anthropic';
 import { SortKey } from '@/lib/holdings';
 
 export type StyleLean = 'longterm' | 'balanced' | 'momentum';
@@ -40,6 +40,19 @@ export const useSettings = create<SettingsState>()(
       sortKey: 'value',
       set: (partial) => set(partial),
     }),
-    { name: 'stockpile.settings', storage: createJSONStorage(() => AsyncStorage) },
+    {
+      name: 'stockpile.settings',
+      storage: createJSONStorage(() => AsyncStorage),
+      version: 1,
+      // A model name saved before the list changed would leave the picker with
+      // nothing highlighted; snap it back to the default instead.
+      migrate: (persisted) => {
+        const s = persisted as Partial<SettingsState>;
+        if (s && s.thesisModel && !THESIS_MODELS.includes(s.thesisModel)) {
+          s.thesisModel = DEFAULT_THESIS_MODEL;
+        }
+        return s as unknown as SettingsState;
+      },
+    },
   ),
 );

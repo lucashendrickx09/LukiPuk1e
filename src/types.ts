@@ -129,3 +129,136 @@ export interface NotificationItem extends NotificationDraft {
   /** True once the OS actually displayed it (see store deliverPending). */
   delivered?: boolean;
 }
+
+// ---- Deep research ------------------------------------------------------
+// The research engine reads a company across four evidence pillars (company
+// filings, sell-side/bank research, institutional & insider positioning, and
+// congressional disclosures) and returns a sourced verdict. Everything the
+// model asserts is split into three buckets on purpose: DATA (a figure from a
+// document), SOURCES (where it came from) and SPECULATION (forward-looking
+// judgement that no document supports yet).
+
+export type ResearchPillar =
+  | 'financials'
+  | 'wallStreet'
+  | 'institutions'
+  | 'politicians';
+
+export type SourceKind =
+  | 'filing' // 10-K, 10-Q, 8-K, S-1
+  | 'transcript' // earnings call / investor day
+  | 'investorLetter' // fund letters, shareholder letters
+  | 'analyst' // bank or research-firm note, price target
+  | 'institutional' // 13F/13D/G, Form 4 insider trades
+  | 'political' // STOCK Act periodic transaction reports
+  | 'news'
+  | 'other';
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  publisher?: string;
+  /** YYYY-MM-DD when the model could establish it. */
+  date?: string;
+  kind: SourceKind;
+}
+
+export type Stance = 'bullish' | 'bearish' | 'neutral';
+
+export interface EvidenceItem {
+  /** The finding, stated plainly. */
+  claim: string;
+  /** The underlying figures/quotes — the "data" half of data vs speculation. */
+  detail: string;
+  stance: Stance;
+  /** Index into DeepResearchReport.sources, when attributable. */
+  sourceIndex?: number;
+}
+
+export interface EvidenceBlock {
+  summary: string;
+  items: EvidenceItem[];
+  /** 0-100: how well-evidenced this pillar is (low = little was findable). */
+  strength: number;
+}
+
+export type ResearchVerdict = 'buy' | 'accumulate' | 'hold' | 'trim' | 'exit' | 'avoid';
+
+export interface DeepResearchReport {
+  symbol: string;
+  name: string;
+  /** True when the report was produced for a position you already hold. */
+  owned: boolean;
+  generatedAt: string;
+  model: string;
+
+  // Long-form identity — this is what elongates the company description.
+  profileLong: string;
+  businessModel: string;
+  moat: string;
+  futureRole: string;
+  relevanceDrivers: string[];
+  relevanceRisks: string[];
+
+  financials: EvidenceBlock;
+  wallStreet: EvidenceBlock;
+  institutions: EvidenceBlock;
+  politicians: EvidenceBlock;
+
+  verdict: ResearchVerdict;
+  /** 0-100 confidence in the verdict. */
+  confidence: number;
+  reasoning: string;
+  /** Hard numbers the verdict leans on. */
+  keyData: { label: string; value: string; note?: string }[];
+  /** Explicitly forward-looking, unproven judgement. */
+  speculation: string;
+  /** What would falsify the verdict. */
+  disconfirming: string[];
+  /** Suggested share of the portfolio, 0-100. */
+  targetWeightPct?: number;
+  sources: ResearchSource[];
+}
+
+export type ActionKind = 'sell' | 'trim' | 'buy' | 'add' | 'hold' | 'watch';
+
+export interface RebalanceAction {
+  id: string;
+  kind: ActionKind;
+  /** One-line instruction, e.g. "Trim 12 NKE ($1,140) → add 3 ASML ($1,116)". */
+  headline: string;
+  sellSymbol?: string;
+  sellShares?: number;
+  sellValueUsd?: number;
+  buySymbol?: string;
+  buyShares?: number;
+  buyValueUsd?: number;
+  reasoning: string;
+  /** 0-100. */
+  confidence: number;
+  risks: string;
+  /** URLs backing the action (subset of the reports' sources). */
+  sourceUrls: string[];
+}
+
+export interface ResearchProgress {
+  phase: 'idle' | 'planning' | 'company' | 'synthesis' | 'done' | 'error';
+  done: number;
+  total: number;
+  message: string;
+}
+
+export interface ResearchRun {
+  id: string;
+  startedAt: string;
+  finishedAt?: string;
+  model: string;
+  /** Symbols requested for this run. */
+  symbols: string[];
+  /** Narrative view of the whole portfolio. */
+  portfolioView: string;
+  actions: RebalanceAction[];
+  /** Which sources were consulted and what the known blind spots are. */
+  method: string;
+  failures: { symbol: string; reason: string }[];
+}

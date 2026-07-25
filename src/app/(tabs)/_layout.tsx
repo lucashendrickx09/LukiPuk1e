@@ -66,8 +66,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
             onPress={onPress}
             style={styles.item}
             activeOpacity={0.7}>
-            {options.tabBarIcon?.({ focused, color: color as string, size: 24 })}
-            <Text style={[styles.label, { color }]}>{options.title ?? route.name}</Text>
+            {options.tabBarIcon?.({ focused, color: color as string, size: 23 })}
+            <Text style={[styles.label, { color }]} numberOfLines={1}>
+              {options.title ?? route.name}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -91,6 +93,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="discover" options={{ title: 'Discover', tabBarIcon: tabIcon('flame') }} />
       <Tabs.Screen name="catalog" options={{ title: 'Catalog', tabBarIcon: tabIcon('bookmark') }} />
       <Tabs.Screen name="folders" options={{ title: 'Folders', tabBarIcon: tabIcon('folder') }} />
+      <Tabs.Screen name="research" options={{ title: 'Research', tabBarIcon: tabIcon('flask') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings') }} />
     </Tabs>
   );
@@ -104,6 +107,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingTop: 8,
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  label: { fontSize: 11, fontWeight: '600' },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
+  label: { fontSize: 10, fontWeight: '600' },
 });

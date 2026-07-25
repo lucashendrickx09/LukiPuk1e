@@ -5,7 +5,13 @@ import { KeyMetrics, SignalSummary, Thesis } from '@/types';
 // is Haiku-class per the product spec (~10 theses/day ≈ a few dollars/month);
 // the model is user-configurable in Settings.
 export const DEFAULT_THESIS_MODEL = 'claude-haiku-4-5';
-export const THESIS_MODELS = ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'];
+export const THESIS_MODELS = ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'];
+
+// Deep research runs on demand rather than daily, and its whole value is the
+// quality of the reasoning over what it finds, so it defaults to the strongest
+// model. Switchable in Settings for people who'd rather pay less per run.
+export const DEFAULT_RESEARCH_MODEL = 'claude-opus-5';
+export const RESEARCH_MODELS = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
 
 const THESIS_SCHEMA = {
   type: 'object',
@@ -88,6 +94,114 @@ export async function writeThesisWithClaude(
   }
 }
 
+// ---- Grounded JSON --------------------------------------------------------
+// Shared plumbing for every call that needs Claude to search the live web and
+// hand back a typed object. Two API features vary by account/model — the search
+// tool version and structured outputs — so we probe once per session and stick
+// with the first combination that works instead of failing the whole run.
+
+const SEARCH_TOOL_VERSIONS = ['web_search_20260209', 'web_search_20250305'] as const;
+
+interface CallPlan {
+  searchTool: (typeof SEARCH_TOOL_VERSIONS)[number];
+  structured: boolean;
+}
+
+const PLANS: CallPlan[] = [
+  { searchTool: 'web_search_20260209', structured: true },
+  { searchTool: 'web_search_20250305', structured: true },
+  { searchTool: 'web_search_20260209', structured: false },
+  { searchTool: 'web_search_20250305', structured: false },
+];
+
+// Index of the plan that last worked; probing restarts from here.
+let planIndex = 0;
+
+export interface GroundedJsonOpts {
+  apiKey: string;
+  model: string;
+  system: string;
+  user: string;
+  /** JSON Schema describing the object to return. */
+  schema: Record<string, unknown>;
+  maxTokens: number;
+  /** Cap on (paid) web searches. 0 turns searching off entirely. */
+  maxSearches: number;
+  signal?: AbortSignal;
+}
+
+/** Pull the first well-formed JSON object out of a model reply. */
+export function extractJsonObject(text: string): unknown {
+  let t = text.trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  const start = t.indexOf('{');
+  const end = t.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) throw new Error('no JSON object in response');
+  return JSON.parse(t.slice(start, end + 1));
+}
+
+function textOf(response: { content: { type: string }[] }): string {
+  return response.content
+    .filter((b) => b.type === 'text')
+    .map((b) => (b as unknown as { text: string }).text)
+    .join('\n');
+}
+
+/**
+ * One Claude call that searches the web and returns a typed object. Throws on
+ * refusal, truncation, or if every fallback plan fails.
+ */
+export async function groundedJson<T>(opts: GroundedJsonOpts): Promise<T> {
+  const client = new Anthropic({
+    apiKey: opts.apiKey,
+    dangerouslyAllowBrowser: true,
+    maxRetries: 1,
+  });
+
+  // The schema is also spelled out in the prompt: it steers the structured path
+  // and is the only contract on the unstructured fallback path.
+  const user =
+    opts.user +
+    '\n\nReturn ONLY a JSON object (no prose, no markdown fences) conforming to this JSON Schema:\n' +
+    JSON.stringify(opts.schema);
+
+  let lastError: unknown = null;
+  for (let i = 0; i < PLANS.length; i++) {
+    const plan = PLANS[(planIndex + i) % PLANS.length];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body: any = {
+        model: opts.model,
+        max_tokens: opts.maxTokens,
+        system: opts.system,
+        messages: [{ role: 'user', content: user }],
+      };
+      if (opts.maxSearches > 0) {
+        body.tools = [{ type: plan.searchTool, name: 'web_search', max_uses: opts.maxSearches }];
+      }
+      if (plan.structured) {
+        body.output_config = { format: { type: 'json_schema', schema: opts.schema } };
+      }
+
+      const response = await client.messages.create(body, { signal: opts.signal });
+      if (response.stop_reason === 'refusal') throw new Error('Claude declined the request');
+      if (response.stop_reason === 'max_tokens') {
+        throw new Error('response was cut off — try a smaller scope');
+      }
+      const parsed = extractJsonObject(textOf(response)) as T;
+      planIndex = (planIndex + i) % PLANS.length; // remember what worked
+      return parsed;
+    } catch (e) {
+      lastError = e;
+      // A refusal or an aborted run is final — retrying other plans won't help.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/declined|abort/i.test(msg)) throw e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Claude request failed');
+}
+
 // ---- Claude web-search deck discovery -----------------------------------
 // One grounded call: Claude searches live sources and returns both the picks
 // AND their analysis. Used as the deck engine when an Anthropic key is set.
@@ -136,15 +250,18 @@ Search the web first, then reply with ONLY a JSON array (no markdown, no prose) 
 [{"ticker":"NVDA","name":"NVIDIA","sector":"Semiconductors","capTier":"Mega-cap","hook":"one punchy sentence","blurb":"2-3 sentences on what they do and why now","bullCase":["point","point","point"],"bearCase":["risk","risk"],"longTermScore":78,"momentumScore":84,"sources":[{"title":"headline","url":"https://..."}]}]
 Rules: capTier is one of Mega-cap | Large-cap | Mid-cap | Small-cap. Scores are 0-100. Include 2-4 real source links per stock from your search.`;
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 8000,
-    system: DISCOVER_SYSTEM,
-    // Server-side web search; max_uses caps the (paid) searches per build.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }] as any,
-    messages: [{ role: 'user', content: user }],
-  });
+  // Server-side web search; max_uses caps the (paid) searches per build. The
+  // newer tool version isn't available on every account, so fall back.
+  const send = (searchTool: string) =>
+    client.messages.create({
+      model,
+      max_tokens: 8000,
+      system: DISCOVER_SYSTEM,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ type: searchTool, name: 'web_search', max_uses: 6 }] as any,
+      messages: [{ role: 'user', content: user }],
+    });
+  const response = await send(SEARCH_TOOL_VERSIONS[0]).catch(() => send(SEARCH_TOOL_VERSIONS[1]));
 
   if (response.stop_reason === 'refusal') throw new Error('Claude declined the request');
   const text = response.content

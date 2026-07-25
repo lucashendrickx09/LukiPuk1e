@@ -20,6 +20,7 @@ import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
 import { useNotifications } from '@/store/notifications';
 import { usePortfolio } from '@/store/portfolio';
+import { useResearch } from '@/store/research';
 import { useSettings } from '@/store/settings';
 import { colors, plColor, spacing } from '@/theme';
 import { Candle, Position } from '@/types';
@@ -38,6 +39,7 @@ export default function PortfolioScreen() {
   const quotes = useMarket((s) => s.quotes);
   const profiles = useMarket((s) => s.profiles);
   const lastError = useMarket((s) => s.lastError);
+  const latestRun = useResearch((s) => s.runs[0]);
   const hasKey = useSettings((s) => s.hasFinnhubKey);
   const [candles, setCandles] = useState<Record<string, Candle[]>>({});
 
@@ -207,6 +209,32 @@ export default function PortfolioScreen() {
         </Card>
       </TouchableOpacity>
 
+      {/* Deep research: the sourced, evidence-backed layer over the quick
+          suggestions below. Surfaced here because it acts on this screen. */}
+      <TouchableOpacity onPress={() => router.push('/research')} activeOpacity={0.8}>
+        <Card style={{ borderColor: colors.purple + '55' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.analyticsTitle}>Deep research</Text>
+              <Text style={styles.researchSub}>
+                {latestRun
+                  ? latestRun.actions.length > 0
+                    ? latestRun.actions[0].headline
+                    : 'Researched — nothing worth changing right now.'
+                  : 'Read filings, bank research, institutional positioning and congressional trades for every company you own or watch.'}
+              </Text>
+            </View>
+            <Text style={styles.analyticsArrow}>→</Text>
+          </View>
+          {latestRun && latestRun.actions.length > 1 ? (
+            <Text style={styles.recNote}>
+              +{latestRun.actions.length - 1} more suggested move
+              {latestRun.actions.length === 2 ? '' : 's'}
+            </Text>
+          ) : null}
+        </Card>
+      </TouchableOpacity>
+
       {recs.length > 0 ? (
         <>
           <SectionTitle>Suggestions</SectionTitle>
@@ -363,6 +391,7 @@ const styles = StyleSheet.create({
   sortChipTxtActive: { color: '#08111E' },
   analyticsRow: { flexDirection: 'row', alignItems: 'center' },
   analyticsTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  researchSub: { color: colors.muted, fontSize: 13, lineHeight: 19, marginTop: 3 },
   analyticsSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
   analyticsArrow: { color: colors.blue, fontSize: 20, fontWeight: '700', marginLeft: spacing.md },
   recTitle: { color: colors.text, fontSize: 14, fontWeight: '700', flex: 1 },

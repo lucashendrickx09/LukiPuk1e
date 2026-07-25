@@ -13,10 +13,12 @@ import {
 } from 'react-native';
 import { fetchDailyCandles, lastNCandles, pctReturn } from '@/api/stooq';
 import { LineChart } from '@/components/charts';
+import { ConfidenceMeter, VerdictChip } from '@/components/research';
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { buildHoldings } from '@/lib/holdings';
 import { useMarket } from '@/store/market';
 import { usePortfolio } from '@/store/portfolio';
+import { useResearch } from '@/store/research';
 import { colors, plColor, radius, spacing } from '@/theme';
 import { Candle } from '@/types';
 import { capTierLabel, fmtCompact, fmtMoney, fmtPct } from '@/utils/format';
@@ -38,6 +40,7 @@ export default function HoldingDetailScreen() {
   const buyShares = usePortfolio((s) => s.buyShares);
   const sellShares = usePortfolio((s) => s.sellShares);
   const removeSymbol = usePortfolio((s) => s.removeSymbol);
+  const report = useResearch((s) => (symbol ? s.reports[symbol] : undefined));
 
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[1]);
@@ -218,6 +221,26 @@ export default function HoldingDetailScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Deep research verdict, when this position has been researched. */}
+        {report ? (
+          <TouchableOpacity onPress={() => router.push(`/research/${holding.symbol}`)}>
+            <Card style={{ marginTop: spacing.md, borderColor: colors.purple + '55' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <VerdictChip verdict={report.verdict} size={13} />
+                <Text style={{ color: colors.muted, fontSize: 12, flex: 1 }}>
+                  Does it still earn its place? · {report.generatedAt.slice(0, 10)}
+                </Text>
+                <Text style={{ color: colors.blue, fontSize: 13, fontWeight: '700' }}>Read ›</Text>
+              </View>
+              <ConfidenceMeter value={report.confidence} compact />
+            </Card>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.researchBtn} onPress={() => router.push('/research')}>
+            <Text style={styles.researchBtnTxt}>Deep research this position</Text>
+          </TouchableOpacity>
+        )}
+
         <SectionTitle>Stats</SectionTitle>
         <Card>
           <View style={styles.grid}>
@@ -333,6 +356,15 @@ const styles = StyleSheet.create({
   note: { color: colors.faint, fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
   action: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: spacing.sm },
   actionTxt: { color: '#08111E', fontWeight: '800', fontSize: 15 },
+  researchBtn: {
+    borderWidth: 1,
+    borderColor: colors.purple,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  researchBtnTxt: { color: colors.purple, fontSize: 14, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: '50%', paddingVertical: 8 },
   cellLabel: { color: colors.faint, fontSize: 11 },

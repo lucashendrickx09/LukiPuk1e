@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Linking,
@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import { fetchDailyCandles, lastNCandles } from '@/api/stooq';
 import { LineChart } from '@/components/charts';
+import { BulletList, ConfidenceMeter, Paragraphs, VerdictChip } from '@/components/research';
 import { Card, Chip, EmptyState, Logo, PctText, ScoreBar, SectionTitle } from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
 import { useDeck } from '@/store/deck';
 import { useMarket } from '@/store/market';
-import { colors, spacing } from '@/theme';
+import { useResearch } from '@/store/research';
+import { colors, radius, spacing } from '@/theme';
 import { Candle } from '@/types';
 import { capTierLabel, fmtCompact, fmtMoney, fmtPct } from '@/utils/format';
 
@@ -31,6 +33,7 @@ export default function CompanyDetailScreen() {
   const catalogEntry = useCatalog((s) => s.entries.find((e) => e.card.symbol === symbol));
   const deckCard = useDeck((s) => s.cards.find((c) => c.symbol === symbol));
   const quote = useMarket((s) => (symbol ? s.quotes[symbol] : undefined));
+  const report = useResearch((s) => (symbol ? s.reports[symbol] : undefined));
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[1]);
 
@@ -44,6 +47,57 @@ export default function CompanyDetailScreen() {
     () => (candles ? lastNCandles(candles, range.days).map((c) => c.close) : []),
     [candles, range],
   );
+
+  // A company you own but never swiped has no deck card — the research brief is
+  // then the only analysis there is, and it's plenty.
+  if (!card && report) {
+    return (
+      <>
+        <Stack.Screen options={{ title: report.name }} />
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 64 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <Logo uri={useMarket.getState().profiles[report.symbol]?.logo} symbol={report.symbol} size={52} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{report.name}</Text>
+              <Text style={{ color: colors.muted, fontSize: 13 }}>{report.symbol}</Text>
+            </View>
+            {quote ? (
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.price}>{fmtMoney(quote.price)}</Text>
+                <PctText value={quote.changePct} />
+              </View>
+            ) : null}
+          </View>
+
+          <Card style={{ marginTop: spacing.lg, borderColor: colors.purple + '55' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <VerdictChip verdict={report.verdict} size={13} />
+              <Text style={styles.researchStamp}>
+                Deep research · {report.generatedAt.slice(0, 10)}
+              </Text>
+            </View>
+            <ConfidenceMeter value={report.confidence} compact />
+          </Card>
+
+          <SectionTitle>What they do</SectionTitle>
+          <Card>
+            <Paragraphs text={report.profileLong} />
+          </Card>
+
+          <SectionTitle>Their role from here</SectionTitle>
+          <Card>
+            <Paragraphs text={report.futureRole} />
+          </Card>
+
+          <TouchableOpacity
+            style={styles.researchBtn}
+            onPress={() => router.push(`/research/${report.symbol}`)}>
+            <Text style={styles.researchBtnTxt}>Full research brief · evidence & sources</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </>
+    );
+  }
 
   if (!card) {
     return (
@@ -99,6 +153,21 @@ export default function CompanyDetailScreen() {
           />
         </View>
 
+        {report ? (
+          <TouchableOpacity onPress={() => router.push(`/research/${card.symbol}`)}>
+            <Card style={{ marginTop: spacing.lg, borderColor: colors.purple + '55' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <VerdictChip verdict={report.verdict} size={13} />
+                <Text style={styles.researchStamp}>
+                  Deep research · {report.generatedAt.slice(0, 10)}
+                </Text>
+                <Text style={{ color: colors.blue, fontSize: 13, fontWeight: '700' }}>Read ›</Text>
+              </View>
+              <ConfidenceMeter value={report.confidence} compact />
+            </Card>
+          </TouchableOpacity>
+        ) : null}
+
         <Card style={{ marginTop: spacing.lg }}>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
             {RANGES.map((r) => (
@@ -152,8 +221,49 @@ export default function CompanyDetailScreen() {
 
         <SectionTitle>What they do</SectionTitle>
         <Card>
-          <Text style={styles.body}>{card.thesis.blurb}</Text>
+          {/* The short blurb is the fallback; once a deep-research brief exists
+              this becomes the full picture of the company. */}
+          {report?.profileLong ? (
+            <>
+              <Paragraphs text={report.profileLong} />
+              {report.businessModel ? (
+                <>
+                  <Text style={styles.subhead}>How the money is made</Text>
+                  <Paragraphs text={report.businessModel} />
+                </>
+              ) : null}
+              {report.moat ? (
+                <>
+                  <Text style={styles.subhead}>What protects them</Text>
+                  <Paragraphs text={report.moat} />
+                </>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.body}>{card.thesis.blurb}</Text>
+          )}
         </Card>
+
+        {report ? (
+          <>
+            <SectionTitle>Their role from here</SectionTitle>
+            <Card>
+              <Paragraphs text={report.futureRole} />
+              {report.relevanceDrivers.length > 0 ? (
+                <>
+                  <Text style={styles.subhead}>What keeps them relevant</Text>
+                  <BulletList items={report.relevanceDrivers} color={colors.green} glyph="▲" />
+                </>
+              ) : null}
+              {report.relevanceRisks.length > 0 ? (
+                <>
+                  <Text style={styles.subhead}>What could make them irrelevant</Text>
+                  <BulletList items={report.relevanceRisks} color={colors.red} glyph="▼" />
+                </>
+              ) : null}
+            </Card>
+          </>
+        ) : null}
 
         <SectionTitle>Why you might buy</SectionTitle>
         <Card>
@@ -210,6 +320,16 @@ export default function CompanyDetailScreen() {
           </>
         ) : null}
 
+        <TouchableOpacity
+          style={styles.researchBtn}
+          onPress={() => router.push(report ? `/research/${card.symbol}` : '/research')}>
+          <Text style={styles.researchBtnTxt}>
+            {report
+              ? `Full research brief · evidence & sources`
+              : 'Run deep research on this company'}
+          </Text>
+        </TouchableOpacity>
+
         <Text style={styles.footer}>
           Analyzed {card.builtAt.slice(0, 10)} · educational analysis, not financial advice.
         </Text>
@@ -230,6 +350,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   rangeBtnActive: { backgroundColor: colors.blue },
+  researchStamp: { color: colors.muted, fontSize: 12, flex: 1 },
+  subhead: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  researchBtn: {
+    borderWidth: 1,
+    borderColor: colors.purple,
+    borderRadius: radius.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  researchBtnTxt: { color: colors.purple, fontSize: 14, fontWeight: '700' },
   consensusTrack: { height: 8, borderRadius: 4, backgroundColor: colors.red + '55', overflow: 'hidden' },
   consensusFill: { height: 8, backgroundColor: colors.green },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
