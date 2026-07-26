@@ -148,6 +148,58 @@ function textOf(response: { content: { type: string }[] }): string {
     .join('\n');
 }
 
+// ---- Rate limits ----------------------------------------------------------
+// A 429 means "you're going too fast", not "this request shape is wrong". It
+// must not be treated as a failed capability probe — advancing to the next
+// plan would fire another request immediately and make the throttling worse.
+
+export function isRateLimited(e: unknown): boolean {
+  const err = e as { status?: number; message?: string } | null;
+  if (err?.status === 429) return true;
+  return /rate.?limit|429|too many requests/i.test(err?.message ?? '');
+}
+
+/** How long to wait, honouring the server's retry-after when it sends one. */
+function backoffMs(e: unknown, attempt: number): number {
+  const headers = (e as { headers?: unknown })?.headers;
+  let after: string | null = null;
+  if (headers && typeof (headers as Headers).get === 'function') {
+    after = (headers as Headers).get('retry-after');
+  } else if (headers && typeof headers === 'object') {
+    const bag = headers as Record<string, string>;
+    after = bag['retry-after'] ?? bag['Retry-After'] ?? null;
+  }
+  const seconds = after ? Number(after) : NaN;
+  if (isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 60_000);
+  // No header — exponential backoff with a little jitter.
+  return Math.min(2000 * 2 ** attempt, 30_000) + Math.floor(Math.random() * 500);
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t);
+      reject(new Error('aborted'));
+    });
+  });
+
+/** Retries on 429 only, backing off between attempts. Other errors propagate. */
+async function withRateLimitRetry<T>(
+  fn: () => Promise<T>,
+  tries: number,
+  signal?: AbortSignal,
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!isRateLimited(e) || attempt >= tries - 1 || signal?.aborted) throw e;
+      await sleep(backoffMs(e, attempt), signal);
+    }
+  }
+}
+
 /**
  * One Claude call that searches the web and returns a typed object. Throws on
  * refusal, truncation, or if every fallback plan fails.
@@ -156,7 +208,8 @@ export async function groundedJson<T>(opts: GroundedJsonOpts): Promise<T> {
   const client = new Anthropic({
     apiKey: opts.apiKey,
     dangerouslyAllowBrowser: true,
-    maxRetries: 1,
+    // SDK default: retries 429/5xx with exponential backoff before we see it.
+    maxRetries: 2,
   });
 
   // The schema is also spelled out in the prompt: it steers the structured path
@@ -184,7 +237,11 @@ export async function groundedJson<T>(opts: GroundedJsonOpts): Promise<T> {
         body.output_config = { format: { type: 'json_schema', schema: opts.schema } };
       }
 
-      const response = await client.messages.create(body, { signal: opts.signal });
+      const response = await withRateLimitRetry(
+        () => client.messages.create(body, { signal: opts.signal }),
+        3,
+        opts.signal,
+      );
       if (response.stop_reason === 'refusal') throw new Error('Claude declined the request');
       if (response.stop_reason === 'max_tokens') {
         throw new Error('response was cut off — try a smaller scope');
@@ -197,6 +254,13 @@ export async function groundedJson<T>(opts: GroundedJsonOpts): Promise<T> {
       // A refusal or an aborted run is final — retrying other plans won't help.
       const msg = e instanceof Error ? e.message : String(e);
       if (/declined|abort/i.test(msg)) throw e;
+      // Still rate limited after backing off: the plan is fine, the account is
+      // out of headroom. Trying the remaining plans would only add load.
+      if (isRateLimited(e)) {
+        throw new Error(
+          'Rate limited by the Anthropic API. Wait a minute, then run fewer companies or switch to Standard depth.',
+        );
+      }
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Claude request failed');
@@ -253,15 +317,24 @@ Rules: capTier is one of Mega-cap | Large-cap | Mid-cap | Small-cap. Scores are 
   // Server-side web search; max_uses caps the (paid) searches per build. The
   // newer tool version isn't available on every account, so fall back.
   const send = (searchTool: string) =>
-    client.messages.create({
-      model,
-      max_tokens: 8000,
-      system: DISCOVER_SYSTEM,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ type: searchTool, name: 'web_search', max_uses: 6 }] as any,
-      messages: [{ role: 'user', content: user }],
-    });
-  const response = await send(SEARCH_TOOL_VERSIONS[0]).catch(() => send(SEARCH_TOOL_VERSIONS[1]));
+    withRateLimitRetry(
+      () =>
+        client.messages.create({
+          model,
+          max_tokens: 8000,
+          system: DISCOVER_SYSTEM,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tools: [{ type: searchTool, name: 'web_search', max_uses: 6 }] as any,
+          messages: [{ role: 'user', content: user }],
+        }),
+      3,
+    );
+  const response = await send(SEARCH_TOOL_VERSIONS[0]).catch((e) => {
+    // Only fall back when the tool version is the problem — a 429 means we're
+    // throttled, and firing the second version immediately would compound it.
+    if (isRateLimited(e)) throw e;
+    return send(SEARCH_TOOL_VERSIONS[1]);
+  });
 
   if (response.stop_reason === 'refusal') throw new Error('Claude declined the request');
   const text = response.content

@@ -145,11 +145,13 @@ export function ResearchOverlay() {
           {live.symbols.map((sym) => {
             const state = live.done.includes(sym)
               ? 'done'
-              : live.failed.includes(sym)
-                ? 'failed'
-                : live.active.includes(sym)
-                  ? 'active'
-                  : 'queued';
+              : live.throttled.includes(sym)
+                ? 'throttled'
+                : live.failed.includes(sym)
+                  ? 'failed'
+                  : live.active.includes(sym)
+                    ? 'active'
+                    : 'queued';
             return (
               <View key={sym} style={styles.row}>
                 <Text style={[styles.mark, MARK_STYLE[state]]}>{MARK[state]}</Text>
@@ -173,16 +175,24 @@ export function ResearchOverlay() {
   );
 }
 
-const MARK: Record<string, string> = { done: '✓', failed: '✕', active: '◍', queued: '○' };
+const MARK: Record<string, string> = {
+  done: '✓',
+  failed: '✕',
+  throttled: '⏱',
+  active: '◍',
+  queued: '○',
+};
 const LABEL: Record<string, string> = {
   done: 'brief ready',
   failed: 'no sources found',
+  throttled: 'API rate limit',
   active: 'reading…',
   queued: 'queued',
 };
 const MARK_STYLE: Record<string, { color: string }> = {
   done: { color: colors.green },
   failed: { color: colors.red },
+  throttled: { color: colors.gold },
   active: { color: colors.blue },
   queued: { color: colors.faint },
 };

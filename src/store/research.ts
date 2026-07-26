@@ -42,10 +42,19 @@ export interface LiveRun {
   active: string[];
   done: string[];
   failed: string[];
+  /** Subset of `failed` that ran out of API rate-limit headroom. */
+  throttled: string[];
   startedAt: number;
 }
 
-const noRun: LiveRun = { symbols: [], active: [], done: [], failed: [], startedAt: 0 };
+const noRun: LiveRun = {
+  symbols: [],
+  active: [],
+  done: [],
+  failed: [],
+  throttled: [],
+  startedAt: 0,
+};
 
 interface ResearchState {
   /** Latest brief per symbol. */
@@ -189,7 +198,14 @@ export const useResearch = create<ResearchState>()(
         set({
           running: true,
           error: null,
-          live: { symbols, active: [], done: [], failed: [], startedAt: Date.now() },
+          live: {
+            symbols,
+            active: [],
+            done: [],
+            failed: [],
+            throttled: [],
+            startedAt: Date.now(),
+          },
           progress: {
             phase: 'planning',
             done: 0,
@@ -249,11 +265,16 @@ export const useResearch = create<ResearchState>()(
             }));
           } catch (e) {
             if (signal.aborted) return;
-            failures.push({
-              symbol,
-              reason: e instanceof Error ? e.message : 'research call failed',
-            });
-            set((s) => ({ live: { ...s.live, failed: [...s.live.failed, symbol] } }));
+            const reason = e instanceof Error ? e.message : 'research call failed';
+            failures.push({ symbol, reason });
+            const throttled = /rate limit/i.test(reason);
+            set((s) => ({
+              live: {
+                ...s.live,
+                failed: [...s.live.failed, symbol],
+                throttled: throttled ? [...s.live.throttled, symbol] : s.live.throttled,
+              },
+            }));
           } finally {
             done += 1;
             set((s) => ({
