@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -10,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { THESIS_MODELS } from '@/api/anthropic';
+import { showDialog } from '@/components/Dialog';
 import { Card, SectionTitle } from '@/components/ui';
 import { KEYS, setSecret } from '@/lib/secure';
 import { NotificationSetup } from '@/components/NotificationSetup';
@@ -114,7 +114,7 @@ export default function SettingsScreen() {
   const clearPortfolio = usePortfolio((s) => s.clearAll);
 
   const confirm = (title: string, body: string, action: () => void) =>
-    Alert.alert(title, body, [
+    showDialog(title, body, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Confirm', style: 'destructive', onPress: action },
     ]);

@@ -1,8 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Card, EmptyState, Logo, PctText } from '@/components/ui';
+import { showDialog } from '@/components/Dialog';
 import { NameInputModal } from '@/components/NameInputModal';
 import { useCatalog } from '@/store/catalog';
 import { useFolders } from '@/store/folders';
@@ -79,7 +80,7 @@ export default function FolderDetailScreen() {
                 key={card.symbol}
                 onPress={() => router.push(`/company/${card.symbol}`)}
                 onLongPress={() =>
-                  Alert.alert('Remove from folder', `Remove ${card.symbol} from ${folder.name}?`, [
+                  showDialog('Remove from folder', `Remove ${card.symbol} from ${folder.name}?`, [
                     { text: 'Cancel', style: 'cancel' },
                     {
                       text: 'Remove',
@@ -124,7 +125,7 @@ export default function FolderDetailScreen() {
           <TouchableOpacity
             style={styles.footerBtn}
             onPress={() =>
-              Alert.alert(
+              showDialog(
                 `Delete “${folder.name}”`,
                 'The folder is removed. The companies stay in your catalog.',
                 [

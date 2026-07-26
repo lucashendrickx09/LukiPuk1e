@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { showDialog } from '@/components/Dialog';
 import { NameInputModal } from '@/components/NameInputModal';
 import { Card, EmptyState, Logo } from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
@@ -20,14 +21,14 @@ export default function FoldersScreen() {
     entries.find((e) => e.card.symbol === symbol)?.card.profile.logo;
 
   const manage = (f: Folder) =>
-    Alert.alert(f.name, `${f.symbols.length} stock${f.symbols.length === 1 ? '' : 's'}`, [
+    showDialog(f.name, `${f.symbols.length} stock${f.symbols.length === 1 ? '' : 's'}`, [
       { text: 'Open', onPress: () => router.push(`/folder/${f.id}`) },
       { text: 'Rename', onPress: () => setRenaming(f) },
       {
         text: 'Delete folder',
         style: 'destructive',
         onPress: () =>
-          Alert.alert(
+          showDialog(
             `Delete “${f.name}”`,
             'The folder is removed. The companies stay in your catalog.',
             [

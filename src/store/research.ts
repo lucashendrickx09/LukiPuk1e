@@ -36,6 +36,17 @@ const MAX_COMPANIES = 14;
 
 const idle: ResearchProgress = { phase: 'idle', done: 0, total: 0, message: '' };
 
+/** Per-company state of the run in flight, for the loading screen. */
+export interface LiveRun {
+  symbols: string[];
+  active: string[];
+  done: string[];
+  failed: string[];
+  startedAt: number;
+}
+
+const noRun: LiveRun = { symbols: [], active: [], done: [], failed: [], startedAt: 0 };
+
 interface ResearchState {
   /** Latest brief per symbol. */
   reports: Record<string, DeepResearchReport>;
@@ -43,6 +54,7 @@ interface ResearchState {
   runs: ResearchRun[];
   progress: ResearchProgress;
   running: boolean;
+  live: LiveRun;
   error: string | null;
   /** Cash the investor could deploy — used to size buy actions. */
   cashUsd: number;
@@ -110,6 +122,7 @@ export const useResearch = create<ResearchState>()(
       runs: [],
       progress: idle,
       running: false,
+      live: noRun,
       error: null,
       cashUsd: 0,
       depth: 'deep',
@@ -176,6 +189,7 @@ export const useResearch = create<ResearchState>()(
         set({
           running: true,
           error: null,
+          live: { symbols, active: [], done: [], failed: [], startedAt: Date.now() },
           progress: {
             phase: 'planning',
             done: 0,
@@ -193,14 +207,15 @@ export const useResearch = create<ResearchState>()(
           const holding = ctx.holdings.find((h) => h.symbol === symbol);
           const entry = catalog.find((e) => e.card.symbol === symbol);
           const profile = useMarket.getState().profiles[symbol];
-          set({
+          set((s) => ({
+            live: { ...s.live, active: [...s.live.active, symbol] },
             progress: {
               phase: 'company',
               done,
               total: symbols.length + 1,
               message: `Reading sources on ${symbol}…`,
             },
-          });
+          }));
           try {
             const report = await researchCompany({
               apiKey,
@@ -228,23 +243,28 @@ export const useResearch = create<ResearchState>()(
               },
             });
             reports.push(report);
-            set((s) => ({ reports: { ...s.reports, [symbol]: report } }));
+            set((s) => ({
+              reports: { ...s.reports, [symbol]: report },
+              live: { ...s.live, done: [...s.live.done, symbol] },
+            }));
           } catch (e) {
             if (signal.aborted) return;
             failures.push({
               symbol,
               reason: e instanceof Error ? e.message : 'research call failed',
             });
+            set((s) => ({ live: { ...s.live, failed: [...s.live.failed, symbol] } }));
           } finally {
             done += 1;
-            set({
+            set((s) => ({
+              live: { ...s.live, active: s.live.active.filter((x) => x !== symbol) },
               progress: {
                 phase: 'company',
                 done,
                 total: symbols.length + 1,
                 message: `${done} of ${symbols.length} companies researched`,
               },
-            });
+            }));
           }
         };
 
@@ -288,6 +308,7 @@ export const useResearch = create<ResearchState>()(
           set((s) => ({
             runs: [run, ...s.runs].slice(0, 5),
             running: false,
+            live: noRun,
             progress: {
               phase: 'done',
               done: symbols.length + 1,
@@ -301,6 +322,7 @@ export const useResearch = create<ResearchState>()(
           const cancelled = signal.aborted;
           set({
             running: false,
+            live: noRun,
             error: cancelled ? null : e instanceof Error ? e.message : 'Deep research failed.',
             progress: cancelled
               ? idle
@@ -314,7 +336,7 @@ export const useResearch = create<ResearchState>()(
       cancel: () => {
         abort?.abort();
         abort = null;
-        set({ running: false, progress: idle });
+        set({ running: false, progress: idle, live: noRun });
       },
 
       clearAll: () => set({ reports: {}, runs: [], progress: idle, error: null }),

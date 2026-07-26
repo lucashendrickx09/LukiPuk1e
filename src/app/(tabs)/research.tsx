@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -11,8 +10,9 @@ import {
   View,
 } from 'react-native';
 import { RESEARCH_MODELS } from '@/api/anthropic';
+import { showDialog } from '@/components/Dialog';
 import { Collapsible, ConfidenceMeter, Paragraphs, VerdictChip } from '@/components/research';
-import { Card, EmptyState, Logo, ProgressBar, SectionTitle } from '@/components/ui';
+import { Card, EmptyState, Logo, SectionTitle } from '@/components/ui';
 import { ResearchDepth, searchesPerCompany } from '@/engine/deepResearch';
 import { useCatalog } from '@/store/catalog';
 import { useMarket } from '@/store/market';
@@ -25,7 +25,6 @@ import { fmtMoney } from '@/utils/format';
 
 export default function ResearchScreen() {
   const running = useResearch((s) => s.running);
-  const progress = useResearch((s) => s.progress);
   const error = useResearch((s) => s.error);
   const runs = useResearch((s) => s.runs);
   const reports = useResearch((s) => s.reports);
@@ -61,7 +60,7 @@ export default function ResearchScreen() {
 
   const start = () => {
     const searches = planned.length * searchesPerCompany(depth);
-    Alert.alert(
+    showDialog(
       `Research ${planned.length} companies?`,
       `This makes ${planned.length + 1} Claude calls and up to ${searches} live web searches — the most expensive thing the app does, billed to your own API key. It usually takes a few minutes.\n\n${planned.join(', ')}`,
       [
@@ -113,31 +112,21 @@ export default function ResearchScreen() {
           {SCOPE_OPTIONS.find((o) => o.key === scope)?.help}
         </Text>
 
-        {running ? (
-          <View style={{ marginTop: spacing.lg }}>
-            <ProgressBar done={progress.done} total={progress.total} message={progress.message} />
-            <TouchableOpacity
-              style={[styles.secondaryBtn, { marginTop: spacing.md }]}
-              onPress={() => useResearch.getState().cancel()}>
-              <Text style={[styles.secondaryBtnTxt, { color: colors.red }]}>Stop</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <TouchableOpacity
-              style={[styles.primaryBtn, planned.length === 0 && { opacity: 0.4 }]}
-              disabled={planned.length === 0}
-              onPress={start}>
-              <Text style={styles.primaryBtnTxt}>
-                {latest ? 'Run research again' : 'Run deep research'}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.costLine}>
-              {planned.length} compan{planned.length === 1 ? 'y' : 'ies'} · up to{' '}
-              {planned.length * searchesPerCompany(depth)} web searches · {model}
-            </Text>
-          </>
-        )}
+        {/* While a run is in flight the full-screen loading view (mounted at
+            the app root) is what you actually see; this is just the resting
+            state underneath it. */}
+        <TouchableOpacity
+          style={[styles.primaryBtn, (planned.length === 0 || running) && { opacity: 0.4 }]}
+          disabled={planned.length === 0 || running}
+          onPress={start}>
+          <Text style={styles.primaryBtnTxt}>
+            {running ? 'Research running…' : latest ? 'Run research again' : 'Run deep research'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.costLine}>
+          {planned.length} compan{planned.length === 1 ? 'y' : 'ies'} · up to{' '}
+          {planned.length * searchesPerCompany(depth)} web searches · {model}
+        </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -298,7 +287,7 @@ function ActionCard({ action }: { action: RebalanceAction }) {
     const steps: string[] = [];
     if (canSell) steps.push(`Sell ${action.sellShares} ${action.sellSymbol}`);
     if (canBuy) steps.push(`Buy ${buyShares} ${action.buySymbol} at ${fmtMoney(buyPrice as number)}`);
-    Alert.alert(
+    showDialog(
       'Record this in your portfolio?',
       `${steps.join('\n')}\n\nThis only updates Stockpile's records — it does not place a real trade with your broker.`,
       [

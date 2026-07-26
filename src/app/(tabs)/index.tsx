@@ -1,7 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { fetchDailyCandles } from '@/api/stooq';
+import { showDialog } from '@/components/Dialog';
 import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/charts';
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
@@ -308,7 +308,7 @@ export default function PortfolioScreen() {
           activeOpacity={0.7}
           onPress={() => router.push(`/holding/${h.symbol}`)}
           onLongPress={() =>
-            Alert.alert(h.symbol, `Remove ${h.symbol} from your portfolio?`, [
+            showDialog(h.symbol, `Remove ${h.symbol} from your portfolio?`, [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Remove',

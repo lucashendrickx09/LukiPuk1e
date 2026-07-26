@@ -1,6 +1,8 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
+import { DialogHost } from '@/components/Dialog';
+import { ResearchOverlay } from '@/components/ResearchOverlay';
 import { colors } from '@/theme';
 import { getSecret, KEYS } from '@/lib/secure';
 import { useSettings } from '@/store/settings';
@@ -57,6 +59,10 @@ export default function RootLayout() {
           options={{ presentation: 'modal', title: 'Import portfolio' }}
         />
       </Stack>
+      {/* App-wide so a run stays visible across tabs, and so confirmations
+          work everywhere (RN's Alert is a no-op on web). */}
+      <ResearchOverlay />
+      <DialogHost />
     </ThemeProvider>
   );
 }

@@ -1,7 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { fetchDailyCandles, lastNCandles, pctReturn } from '@/api/stooq';
+import { showDialog } from '@/components/Dialog';
 import { LineChart } from '@/components/charts';
 import { ConfidenceMeter, VerdictChip } from '@/components/research';
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
@@ -103,7 +103,7 @@ export default function HoldingDetailScreen() {
   };
 
   const confirmRemove = () =>
-    Alert.alert(
+    showDialog(
       `Remove ${holding.symbol}`,
       'This deletes the holding and its history from your portfolio. It does not record a sale.',
       [

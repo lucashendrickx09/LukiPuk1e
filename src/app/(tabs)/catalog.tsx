@@ -1,7 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { showDialog } from '@/components/Dialog';
 import { CatalogGrid, GridItem } from '@/components/CatalogGrid';
 import { NameInputModal } from '@/components/NameInputModal';
 import { Card, Chip, EmptyState, Logo, PctText, ScoreBar } from '@/components/ui';
@@ -102,7 +102,7 @@ export default function CatalogScreen() {
   };
 
   const folderMenu = (f: Folder) =>
-    Alert.alert(f.name, `${f.symbols.length} stock${f.symbols.length === 1 ? '' : 's'}`, [
+    showDialog(f.name, `${f.symbols.length} stock${f.symbols.length === 1 ? '' : 's'}`, [
       { text: 'Open', onPress: () => router.push(`/folder/${f.id}`) },
       { text: 'Rename', onPress: () => setRenaming(f) },
       {
