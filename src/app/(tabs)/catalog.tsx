@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   ScrollView,
@@ -36,6 +36,12 @@ export default function CatalogScreen() {
   const [peek, setPeek] = useState<CatalogEntry | null>(null);
   const [renaming, setRenaming] = useState<Folder | null>(null);
   const [namingNew, setNamingNew] = useState<{ folderId: string } | null>(null);
+
+  // While a tile is held for dragging the page must not scroll under it. The
+  // grid drives `dragging`, and scrolls this view itself at the screen edges.
+  const [dragging, setDragging] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
 
   const symbols = useMemo(() => entries.map((e) => e.card.symbol), [entries]);
 
@@ -127,7 +133,14 @@ export default function CatalogScreen() {
   const contentW = width - spacing.lg * 2;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 56 }}>
+    <ScrollView
+      ref={scrollRef}
+      scrollEnabled={!dragging}
+      onScroll={(e) => {
+        scrollY.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
+      contentContainerStyle={{ padding: spacing.lg, paddingBottom: 56 }}>
       <Text style={styles.hint}>
         Tap for a quick look · hold and drag one onto another to group them
       </Text>
@@ -139,6 +152,9 @@ export default function CatalogScreen() {
         onOpen={onOpen}
         onLongPressItem={onLongPressItem}
         onDrop={onDrop}
+        scrollRef={scrollRef}
+        scrollYRef={scrollY}
+        onDragChange={setDragging}
       />
 
       {folders.length > 0 ? (

@@ -1,7 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   PanResponder,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -23,6 +26,11 @@ export const COLUMNS = 4;
 // Photos), which otherwise steals the drag gesture. Not typed in RN core.
 const tileDataProps = { dataSet: { tile: 'true' } } as unknown as Record<string, unknown>;
 
+/** How close to the top/bottom edge before the grid scrolls itself. */
+const EDGE = 90;
+const EDGE_SPEED = 14; // px per tick
+const TICK_MS = 16;
+
 export type GridItem =
   | { kind: 'stock'; key: string; entry: CatalogEntry }
   | { kind: 'folder'; key: string; folder: Folder };
@@ -35,9 +43,25 @@ interface Props {
   onLongPressItem: (item: GridItem) => void;
   /** Dropped `dragged` onto `target`. */
   onDrop: (dragged: GridItem, target: GridItem) => void;
+  /** The containing scroll view, so a drag can scroll it at the edges. */
+  scrollRef?: React.RefObject<ScrollView | null>;
+  /** Live vertical offset of that scroll view. */
+  scrollYRef?: React.MutableRefObject<number>;
+  /** Fires when a drag starts/ends — the parent disables scrolling meanwhile. */
+  onDragChange?: (dragging: boolean) => void;
 }
 
-export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, onDrop }: Props) {
+export function CatalogGrid({
+  items,
+  width,
+  logoFor,
+  onOpen,
+  onLongPressItem,
+  onDrop,
+  scrollRef,
+  scrollYRef,
+  onDragChange,
+}: Props) {
   const cell = width / COLUMNS;
   const tile = Math.min(cell - 14, 74);
   const rowH = cell + 20;
@@ -52,6 +76,12 @@ export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, on
   const hoverRef = useRef<number | null>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+
+  // Live drag state. scrollAtStart lets the tile stay under the finger while
+  // the grid auto-scrolls beneath it.
+  const dragRef = useRef<{ index: number; dx: number; dy: number; scrollAtStart: number } | null>(
+    null,
+  );
 
   const posOf = (index: number) => ({
     col: index % COLUMNS,
@@ -72,6 +102,88 @@ export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, on
     return t;
   };
 
+  // ---- page scroll lock ---------------------------------------------------
+  // On native it's enough to tell the parent to set scrollEnabled={false}. On
+  // web that isn't sufficient: the browser scrolls the container itself, and
+  // `touch-action` only applies to gestures that started after it was set — so
+  // flipping it mid-press does nothing. The one thing that stops an in-flight
+  // touch from scrolling is preventDefault on a non-passive touchmove listener.
+  const blockScroll = useRef<((e: Event) => void) | null>(null);
+
+  const releaseGuard = useRef<(() => void) | null>(null);
+
+  const lockScroll = () => {
+    onDragChange?.(true);
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const block = (e: Event) => e.preventDefault();
+    blockScroll.current = block;
+    document.addEventListener('touchmove', block, { passive: false });
+
+    // Safety net: if the gesture ends without the responder seeing it, the
+    // listener above would leave the page permanently unscrollable.
+    const onEnd = () => reset();
+    releaseGuard.current = () => {
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+  };
+
+  const unlockScroll = () => {
+    onDragChange?.(false);
+    if (blockScroll.current && typeof document !== 'undefined') {
+      document.removeEventListener('touchmove', blockScroll.current);
+    }
+    blockScroll.current = null;
+    releaseGuard.current?.();
+    releaseGuard.current = null;
+  };
+
+  // ---- edge auto-scroll ---------------------------------------------------
+  // Scrolling is off during a drag, so without this you couldn't reach a folder
+  // that sits below the fold.
+  const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const edgeDir = useRef(0);
+
+  const stopEdgeScroll = () => {
+    if (edgeTimer.current) clearInterval(edgeTimer.current);
+    edgeTimer.current = null;
+    edgeDir.current = 0;
+  };
+
+  const updateEdgeScroll = (pageY: number) => {
+    if (!scrollRef?.current || !scrollYRef) return;
+    const h = Dimensions.get('window').height;
+    const dir = pageY < EDGE ? -1 : pageY > h - EDGE ? 1 : 0;
+    if (dir === edgeDir.current) return;
+    stopEdgeScroll();
+    if (dir === 0) return;
+    edgeDir.current = dir;
+    edgeTimer.current = setInterval(() => {
+      const next = Math.max(0, scrollYRef.current + dir * EDGE_SPEED);
+      scrollRef.current?.scrollTo({ y: next, animated: false });
+      // scrollYRef updates from onScroll, but nudge it so a clamped scroll
+      // (already at the top) doesn't leave the tile drifting.
+      scrollYRef.current = next;
+      applyDrag();
+    }, TICK_MS);
+  };
+
+  /** Re-position the dragged tile and recompute its drop target. */
+  const applyDrag = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    const scrolled = (scrollYRef?.current ?? 0) - d.scrollAtStart;
+    const dy = d.dy + scrolled;
+    pan.setValue({ x: d.dx, y: dy });
+    const t = targetFor(d.index, d.dx, dy);
+    if (t !== hoverRef.current) {
+      hoverRef.current = t;
+      setHoverIndex(t);
+    }
+  };
+
   const responders = useMemo(
     () =>
       items.map((_, index) =>
@@ -85,24 +197,31 @@ export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, on
           onPanResponderGrant: () => {
             longPressTimer.current = setTimeout(() => {
               armedRef.current = index;
+              dragRef.current = {
+                index,
+                dx: 0,
+                dy: 0,
+                scrollAtStart: scrollYRef?.current ?? 0,
+              };
               setDragIndex(index);
               pan.setValue({ x: 0, y: 0 });
+              lockScroll();
               onLongPressItem(itemsRef.current[index]);
             }, 260);
           },
 
-          onPanResponderMove: (_e, g) => {
+          onPanResponderMove: (e, g) => {
             if (armedRef.current !== index) {
               // Moved before the long press armed — treat as a scroll/cancel.
               if (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6) clearTimer();
               return;
             }
-            pan.setValue({ x: g.dx, y: g.dy });
-            const t = targetFor(index, g.dx, g.dy);
-            if (t !== hoverRef.current) {
-              hoverRef.current = t;
-              setHoverIndex(t);
+            if (dragRef.current) {
+              dragRef.current.dx = g.dx;
+              dragRef.current.dy = g.dy;
             }
+            applyDrag();
+            updateEdgeScroll(e.nativeEvent.pageY);
           },
 
           onPanResponderRelease: (_e, g) => {
@@ -139,8 +258,11 @@ export function CatalogGrid({ items, width, logoFor, onOpen, onLongPressItem, on
     }
   };
   const reset = () => {
+    stopEdgeScroll();
+    unlockScroll();
     armedRef.current = null;
     hoverRef.current = null;
+    dragRef.current = null;
     setDragIndex(null);
     setHoverIndex(null);
     pan.setValue({ x: 0, y: 0 });
