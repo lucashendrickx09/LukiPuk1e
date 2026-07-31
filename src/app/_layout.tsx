@@ -50,6 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="research/[symbol]" options={{ title: 'Deep research' }} />
         <Stack.Screen name="alerts" options={{ title: 'Alerts' }} />
         <Stack.Screen name="analytics" options={{ title: 'Analytics' }} />
+        <Stack.Screen name="market-map" options={{ title: 'Market map' }} />
         <Stack.Screen
           name="add-position"
           options={{ presentation: 'modal', title: 'Add position' }}
