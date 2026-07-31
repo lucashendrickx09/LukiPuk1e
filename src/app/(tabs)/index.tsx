@@ -11,6 +11,7 @@ import {
 import { fetchDailyCandles } from '@/api/stooq';
 import { showDialog } from '@/components/Dialog';
 import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/charts';
+import { Heatmap, HeatmapLegend } from '@/components/Heatmap';
 import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
@@ -106,6 +107,20 @@ export default function PortfolioScreen() {
   );
   const sortedHoldings = useMemo(() => sortHoldings(holdings, sortKey), [holdings, sortKey]);
 
+  const heatCells = useMemo(
+    () =>
+      holdings.map((h) => ({
+        symbol: h.symbol,
+        name: h.name,
+        value: h.value,
+        changePct: h.dayChangePct,
+        logo: profiles[h.symbol]?.logo,
+      })),
+    [holdings, profiles],
+  );
+  // Taller with more holdings so the smallest tiles stay legible, up to a cap.
+  const heatHeight = Math.min(340, Math.max(190, 130 + heatCells.length * 22));
+
   const catalogEntries = useCatalog((s) => s.entries);
   const recs = useMemo(
     () => buildRecommendations({ positions, priceOf, sectorOf, catalog: catalogEntries }),
@@ -195,6 +210,22 @@ export default function PortfolioScreen() {
           </Text>
         </View>
         {lastError ? <Text style={styles.error}>{lastError}</Text> : null}
+      </Card>
+
+      {/* Market map: area = what the position is worth, colour = today's move.
+          Answers "where is my money" and "how is it doing" in one look. */}
+      <Card>
+        <Text style={styles.analyticsTitle}>Today&apos;s market map</Text>
+        <Text style={[styles.analyticsSub, { marginBottom: spacing.md }]}>
+          Tap a tile to open the position
+        </Text>
+        <Heatmap
+          cells={heatCells}
+          width={width - spacing.lg * 4}
+          height={heatHeight}
+          onPress={(symbol) => router.push(`/holding/${symbol}`)}
+        />
+        <HeatmapLegend />
       </Card>
 
       <TouchableOpacity onPress={() => router.push('/analytics')} activeOpacity={0.7}>
