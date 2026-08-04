@@ -22,6 +22,9 @@ export interface HeatmapCell {
   /** Since purchase. */
   plPct: number;
   pl: number;
+  /** Only used to fill out very tall tiles. */
+  shares?: number;
+  avgCost?: number;
   logo?: string;
 }
 
@@ -67,6 +70,7 @@ export function HeatTile({
   h,
   mode,
   onPress,
+  onLongPress,
 }: {
   cell: HeatmapCell;
   x: number;
@@ -75,9 +79,13 @@ export function HeatTile({
   h: number;
   mode: HeatMode;
   onPress?: (symbol: string) => void;
+  onLongPress?: (symbol: string) => void;
 }) {
   const iw = Math.max(0, w - GAP);
   const ih = Math.max(0, h - GAP);
+  // A dominant position gets a very tall tile; give it more to say so it isn't
+  // mostly void.
+  const towering = ih >= 210 && iw >= 150;
   const huge = iw >= 150 && ih >= 140;
   const big = iw >= 118 && ih >= 92;
   const mid = iw >= 74 && ih >= 54;
@@ -93,8 +101,10 @@ export function HeatTile({
       // measures against. Inert on native.
       {...({ dataSet: { heat: cell.symbol } } as unknown as Record<string, unknown>)}
       activeOpacity={0.75}
-      disabled={!onPress}
+      disabled={!onPress && !onLongPress}
       onPress={() => onPress?.(cell.symbol)}
+      onLongPress={() => onLongPress?.(cell.symbol)}
+      delayLongPress={280}
       style={[
         styles.tile,
         {
@@ -131,6 +141,12 @@ export function HeatTile({
           <Text numberOfLines={1} style={styles.weight}>
             {fmtMoney(cell.value, 0)} · {cell.weightPct.toFixed(1)}% of portfolio
           </Text>
+          {towering && cell.shares !== undefined && cell.avgCost !== undefined ? (
+            <Text numberOfLines={1} style={styles.weight}>
+              {cell.shares} shares · avg {fmtMoney(cell.avgCost)}
+            </Text>
+          ) : null}
+          {towering ? <Text style={styles.holdHint}>Hold for details</Text> : null}
         </>
       ) : null}
 
@@ -148,12 +164,14 @@ export function Heatmap({
   height,
   mode = 'today',
   onPress,
+  onLongPress,
 }: {
   cells: HeatmapCell[];
   width: number;
   height: number;
   mode?: HeatMode;
   onPress?: (symbol: string) => void;
+  onLongPress?: (symbol: string) => void;
 }) {
   const rects = useMemo(
     () => treemap(cells.map((c) => ({ item: c, value: c.value })), width, height),
@@ -163,7 +181,17 @@ export function Heatmap({
   return (
     <View style={{ width, height }}>
       {rects.map(({ item, x, y, w, h }) => (
-        <HeatTile key={item.symbol} cell={item} x={x} y={y} w={w} h={h} mode={mode} onPress={onPress} />
+        <HeatTile
+          key={item.symbol}
+          cell={item}
+          x={x}
+          y={y}
+          w={w}
+          h={h}
+          mode={mode}
+          onPress={onPress}
+          onLongPress={onLongPress}
+        />
       ))}
     </View>
   );
@@ -176,12 +204,14 @@ export function SectorHeatmap({
   height,
   mode = 'today',
   onPress,
+  onLongPress,
 }: {
   cells: HeatmapCell[];
   width: number;
   height: number;
   mode?: HeatMode;
   onPress?: (symbol: string) => void;
+  onLongPress?: (symbol: string) => void;
 }) {
   const groups = useMemo(() => {
     const by = new Map<string, HeatmapCell[]>();
@@ -232,6 +262,7 @@ export function SectorHeatmap({
                   h={r.h}
                   mode={mode}
                   onPress={onPress}
+                  onLongPress={onLongPress}
                 />
               ))}
             </View>
@@ -279,6 +310,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   weight: { color: '#FFFFFF99', fontSize: 11, marginTop: 2, fontVariant: ['tabular-nums'] },
+  holdHint: { color: '#FFFFFF66', fontSize: 10, marginTop: 8 },
   logo: {
     position: 'absolute',
     right: 7,

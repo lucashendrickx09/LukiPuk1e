@@ -1,6 +1,6 @@
 import { router, Stack } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -11,6 +11,7 @@ import {
   HeatmapLegend,
   SectorHeatmap,
 } from '@/components/Heatmap';
+import { HoldingStatsSheet } from '@/components/HoldingStatsSheet';
 import { EmptyState } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildHoldings } from '@/lib/holdings';
@@ -23,6 +24,9 @@ import { fmtMoney, fmtPct } from '@/utils/format';
 // is the whole thing — full height, sector grouping, and enough room per tile
 // for the dollar move and the position's weight.
 
+/** Legend strip plus the one-line footnote under the map. */
+const LEGEND_AND_FOOTNOTE = 62;
+
 export default function MarketMapScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -32,6 +36,10 @@ export default function MarketMapScreen() {
 
   const [mode, setMode] = useState<HeatMode>('today');
   const [grouped, setGrouped] = useState(false);
+  const [detailSymbol, setDetailSymbol] = useState<string | null>(null);
+  // Measured, not assumed — see the mapH comment below.
+  const [viewportH, setViewportH] = useState(0);
+  const [chromeH, setChromeH] = useState(0);
 
   const holdings = useMemo(
     () => buildHoldings({ positions, quotes, profiles }),
@@ -65,6 +73,8 @@ export default function MarketMapScreen() {
         dayChange: h.dayChange,
         plPct: h.plPct,
         pl: h.pl,
+        shares: h.shares,
+        avgCost: h.avgCost,
         logo: profiles[h.symbol]?.logo,
       })),
     [holdings, profiles, total],
@@ -105,16 +115,30 @@ export default function MarketMapScreen() {
   }
 
   const mapW = width - spacing.lg * 2;
-  // Everything above the map: summary strip, two toggles, legend, footnote.
-  const chrome = 240 + insets.bottom;
-  const mapH = Math.max(280, height - chrome);
+  // The chrome above the map is measured rather than guessed — a hard-coded
+  // estimate is wrong on any device it wasn't tuned for, and being wrong here
+  // clipped the map off the bottom of the screen.
+  const mapH = Math.max(
+    300,
+    (viewportH || height) - chromeH - LEGEND_AND_FOOTNOTE - insets.bottom - spacing.lg,
+  );
 
   const open = (symbol: string) => router.push(`/holding/${symbol}`);
+  const detail = holdings.find((h) => h.symbol === detailSymbol) ?? null;
+  const detailCell = cells.find((c) => c.symbol === detailSymbol);
 
   return (
     <>
       <Stack.Screen options={{ title: 'Market map' }} />
-      <View style={[styles.page, { paddingBottom: insets.bottom + spacing.md }]}>
+      <ScrollView
+        style={styles.page}
+        onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.md,
+          paddingBottom: insets.bottom + spacing.xl,
+        }}>
+        <View onLayout={(e) => setChromeH(e.nativeEvent.layout.height)}>
         {/* Summary for the selected lens */}
         <View style={styles.summary}>
           <View>
@@ -176,23 +200,47 @@ export default function MarketMapScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          </View>
         </View>
 
         {grouped ? (
-          <SectorHeatmap cells={cells} width={mapW} height={mapH} mode={mode} onPress={open} />
+          <SectorHeatmap
+            cells={cells}
+            width={mapW}
+            height={mapH}
+            mode={mode}
+            onPress={open}
+            onLongPress={setDetailSymbol}
+          />
         ) : (
-          <Heatmap cells={cells} width={mapW} height={mapH} mode={mode} onPress={open} />
+          <Heatmap
+            cells={cells}
+            width={mapW}
+            height={mapH}
+            mode={mode}
+            onPress={open}
+            onLongPress={setDetailSymbol}
+          />
         )}
 
         <HeatmapLegend mode={mode} />
-        <Text style={styles.footnote}>Tap a tile to open the position.</Text>
-      </View>
+        <Text style={styles.footnote}>Tap a tile to open it · hold for full stats</Text>
+      </ScrollView>
+
+      <HoldingStatsSheet
+        holding={detail}
+        weightPct={detailCell?.weightPct ?? 0}
+        logo={detailCell?.logo}
+        sector={detailCell?.sector}
+        onClose={() => setDetailSymbol(null)}
+        onOpen={open}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  page: { flex: 1 },
   summary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
