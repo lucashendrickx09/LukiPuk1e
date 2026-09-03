@@ -1,0 +1,75 @@
+# Rebuilds the screener cache after the US close and publishes it.
+#
+# The app never calls Yahoo itself — it reads public/data/index.json and the
+# per-company chart files that this job writes. The fetcher aborts rather than
+# publishing a partially-populated universe, so a failed run simply leaves
+# yesterday's data in place.
+
+name: Nightly screener cache
+
+on:
+  schedule:
+    # 23:30 UTC on weekdays — comfortably after the 16:00 ET close in both
+    # EST and EDT, with time for Yahoo to settle the day's numbers.
+    - cron: '30 23 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild even if the latest close is not today (holidays)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screener-nightly
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      # A ~150-name universe at 1.5s between requests takes about 8 minutes;
+      # the timeout is generous enough to absorb retries.
+      - name: Build the screener cache
+        env:
+          FORCE_BUILD: ${{ inputs.force && '1' || '0' }}
+        timeout-minutes: 45
+        run: npm run screener:fetch
+
+      - name: Commit the refreshed cache
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          if git diff --cached --quiet; then
+            echo "No change — market holiday, or the fetch aborted."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Screener cache: $(date -u +%Y-%m-%d)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # A push made with GITHUB_TOKEN does not trigger other workflows, so the
+  # deploy has to be invoked explicitly or the new data never reaches Pages.
+  publish:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy-pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

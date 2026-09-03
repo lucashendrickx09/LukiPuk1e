@@ -17,6 +17,8 @@ on:
       - claude/charming-mccarthy-ho8nq4
       - claude/determined-franklin-q9ibdz
   workflow_dispatch:
+  # Called by the nightly screener job once new data is committed.
+  workflow_call:
 
 permissions:
   contents: read
