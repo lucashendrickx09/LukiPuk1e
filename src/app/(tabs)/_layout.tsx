@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    paddingTop: 8,
+    paddingTop: 10,
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
   label: { fontSize: 10, fontWeight: '600' },

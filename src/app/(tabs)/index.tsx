@@ -12,7 +12,7 @@ import { fetchDailyCandles } from '@/api/stooq';
 import { showDialog } from '@/components/Dialog';
 import { Donut, DonutLegend, HBar, LineChart, Sparkline } from '@/components/charts';
 import { Heatmap, HeatmapLegend } from '@/components/Heatmap';
-import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
+import { Card, Chip, EmptyState, Logo, PctText, SectionTitle, Tappable } from '@/components/ui';
 import { UNIVERSE_BY_SYMBOL } from '@/data/universe';
 import { buildRecommendations, recKindLabel, Recommendation } from '@/engine/recommend';
 import { buildHoldings, SORT_OPTIONS, sortHoldings } from '@/lib/holdings';
@@ -316,12 +316,12 @@ export default function PortfolioScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <SectionTitle>Holdings</SectionTitle>
         <View style={{ flexDirection: 'row', gap: spacing.lg }}>
-          <TouchableOpacity onPress={() => router.push('/import-portfolio')}>
+          <Tappable onPress={() => router.push('/import-portfolio')}>
             <Text style={{ color: colors.blue, fontWeight: '700' }}>Import</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/add-position')}>
+          </Tappable>
+          <Tappable onPress={() => router.push('/add-position')}>
             <Text style={{ color: colors.blue, fontWeight: '700' }}>+ Add</Text>
-          </TouchableOpacity>
+          </Tappable>
         </View>
       </View>
 
@@ -422,8 +422,8 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.muted, fontSize: 13, marginBottom: spacing.sm },
   tapHint: { color: colors.blue, fontSize: 12, fontWeight: '600' },
   sortChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     borderRadius: 999,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,

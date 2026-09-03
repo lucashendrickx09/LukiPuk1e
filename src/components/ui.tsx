@@ -1,7 +1,52 @@
 import React from 'react';
-import { Image, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import {
+  Image,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from 'react-native';
 import { colors, plColor, radius, spacing } from '@/theme';
 import { fmtPct } from '@/utils/format';
+
+/**
+ * A touch target whose tappable area is larger than it looks.
+ *
+ * `hitSlop` is the usual way to do this, but react-native-web does not
+ * implement it — every hitSlop in this app was a no-op in the PWA, which is
+ * where it actually runs. Padding plus an equal negative margin grows the hit
+ * area on every platform while leaving surrounding layout exactly where it
+ * was.
+ */
+export function Tappable({
+  onPress,
+  onLongPress,
+  expand = 12,
+  style,
+  disabled,
+  children,
+}: {
+  onPress?: () => void;
+  onLongPress?: () => void;
+  /** Pixels of invisible target added on every side. */
+  expand?: number;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onLongPress={onLongPress}
+      disabled={disabled}
+      activeOpacity={0.6}
+      style={[{ padding: expand, margin: -expand }, style]}>
+      {children}
+    </TouchableOpacity>
+  );
+}
 
 export function Card({
   children,
@@ -75,8 +120,7 @@ export function ScoreBar({ label, value, color }: { label: string; value: number
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
+export function EmptyState({ title, body }: { title: string; body: string }) {  return (
     <View style={styles.empty}>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>

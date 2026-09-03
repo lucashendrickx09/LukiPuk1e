@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     gap: 3,
     marginBottom: spacing.sm,
   },
-  segmentBtn: { flex: 1, paddingVertical: 7, borderRadius: radius.sm, alignItems: 'center' },
+  segmentBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.sm, alignItems: 'center' },
   segmentActive: { backgroundColor: colors.blue },
   segmentTxt: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   segmentTxtActive: { color: '#08111E', fontWeight: '800' },

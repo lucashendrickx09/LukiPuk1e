@@ -35,7 +35,9 @@ export function ConfidenceMeter({ value, compact }: { value: number; compact?: b
         <Text style={styles.meterLabel}>
           Confidence{compact ? '' : ` · ${confidenceLabel(value)}`}
         </Text>
-        <Text style={{ color: c, fontSize: 12, fontWeight: '800' }}>{value}</Text>
+        <Text style={{ color: c, fontSize: 12, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+          {value}
+        </Text>
       </View>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${Math.max(2, value)}%`, backgroundColor: c }]} />

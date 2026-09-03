@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     gap: 3,
   },
-  segmentBtn: { flex: 1, paddingVertical: 8, borderRadius: radius.sm, alignItems: 'center' },
+  segmentBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.sm, alignItems: 'center' },
   segmentBtnActive: { backgroundColor: colors.blue },
   segmentTxt: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   scopeHelp: { color: colors.faint, fontSize: 12, marginTop: spacing.sm },

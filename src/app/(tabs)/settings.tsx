@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { THESIS_MODELS } from '@/api/anthropic';
 import { showDialog } from '@/components/Dialog';
-import { Card, SectionTitle } from '@/components/ui';
+import { Card, SectionTitle, Tappable } from '@/components/ui';
 import { KEYS, setSecret } from '@/lib/secure';
 import { NotificationSetup } from '@/components/NotificationSetup';
 import { useCatalog } from '@/store/catalog';
@@ -65,16 +65,16 @@ function KeyField({
       {saved && !editing ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <Text style={{ color: colors.green, fontSize: 13 }}>•••••••• saved</Text>
-          <TouchableOpacity onPress={() => setEditing(true)}>
+          <Tappable onPress={() => setEditing(true)}>
             <Text style={{ color: colors.blue, fontSize: 13, fontWeight: '600' }}>Replace</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </Tappable>
+          <Tappable
             onPress={() => {
               onSave('');
               setEditing(false);
             }}>
             <Text style={{ color: colors.red, fontSize: 13 }}>Remove</Text>
-          </TouchableOpacity>
+          </Tappable>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     padding: 3,
     marginBottom: spacing.xs,
   },
-  segmentItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+  segmentItem: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 6 },
   segmentActive: { backgroundColor: colors.blue },
   segmentTxt: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   segmentTxtActive: { color: '#08111E' },

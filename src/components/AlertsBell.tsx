@@ -11,8 +11,7 @@ export function AlertsBell() {
   return (
     <TouchableOpacity
       onPress={() => router.push('/alerts')}
-      hitSlop={8}
-      style={{ paddingHorizontal: 16, paddingVertical: 4 }}>
+      style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
       <Ionicons name="notifications-outline" size={22} color={colors.text} />
       {count > 0 ? (
         <View

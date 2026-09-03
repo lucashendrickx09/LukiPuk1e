@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   count: { color: colors.faint, fontSize: 12 },
   logoRow: { flexDirection: 'row', gap: 6, marginTop: spacing.md, flexWrap: 'wrap', alignItems: 'center' },
   more: { color: colors.muted, fontSize: 12, fontWeight: '600', alignSelf: 'center' },
-  menuBtn: { paddingHorizontal: 6, paddingVertical: 2 },
+  menuBtn: { paddingHorizontal: 14, paddingVertical: 12, margin: -6 },
   menuBtnTxt: { color: colors.blue, fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   empty: { color: colors.faint, fontSize: 12, marginTop: spacing.sm },
 });

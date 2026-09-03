@@ -344,8 +344,8 @@ const styles = StyleSheet.create({
   body: { color: colors.text, fontSize: 14, lineHeight: 21 },
   whyTag: { color: colors.gold, fontSize: 13, lineHeight: 18, marginBottom: spacing.md },
   rangeBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     borderRadius: 8,
     backgroundColor: colors.surfaceAlt,
   },

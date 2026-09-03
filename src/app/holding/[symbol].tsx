@@ -351,7 +351,12 @@ const styles = StyleSheet.create({
   price: { color: colors.text, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   valueLabel: { color: colors.muted, fontSize: 13 },
   value: { color: colors.text, fontSize: 30, fontWeight: '800', fontVariant: ['tabular-nums'], marginTop: 2 },
-  rangeBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.surfaceAlt },
+  rangeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceAlt,
+  },
   rangeActive: { backgroundColor: colors.blue },
   note: { color: colors.faint, fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
   action: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: spacing.sm },

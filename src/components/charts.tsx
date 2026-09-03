@@ -128,7 +128,13 @@ export function DonutLegend({ slices }: { slices: DonutSlice[] }) {
           <Text style={{ color: colors.muted, fontSize: 12, flex: 1 }} numberOfLines={1}>
             {s.label}
           </Text>
-          <Text style={{ color: colors.text, fontSize: 12, fontWeight: '600' }}>
+          <Text
+            style={{
+              color: colors.text,
+              fontSize: 12,
+              fontWeight: '600',
+              fontVariant: ['tabular-nums'],
+            }}>
             {((s.value / total) * 100).toFixed(0)}%
           </Text>
         </View>
@@ -226,6 +232,7 @@ export function BarChart({
               textAlign: 'center',
               color: colors.faint,
               fontSize: 9,
+              fontVariant: ['tabular-nums'],
             }}>
             {d.label}
           </Text>
@@ -359,7 +366,10 @@ export function Gauge({
         <Path d={track} fill="none" stroke={colors.surfaceAlt} strokeWidth={8} strokeLinecap="round" />
         <Path d={fill} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round" />
       </Svg>
-      <Text style={{ color, fontSize: 20, fontWeight: '800', marginTop: -6 }}>{display}</Text>
+      <Text
+        style={{ color, fontSize: 20, fontWeight: '800', marginTop: -6, fontVariant: ['tabular-nums'] }}>
+        {display}
+      </Text>
       <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>{label}</Text>
     </View>
   );
@@ -396,13 +406,27 @@ export function CompareBars({
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               {bar(r.a, r.a >= 0 ? colors.blue : colors.red)}
-              <Text style={{ color: colors.blue, fontSize: 11, width: 62, textAlign: 'right' }}>
+              <Text
+                style={{
+                  color: colors.blue,
+                  fontSize: 11,
+                  width: 62,
+                  textAlign: 'right',
+                  fontVariant: ['tabular-nums'],
+                }}>
                 {r.format(r.a)}
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               {bar(r.b, colors.faint)}
-              <Text style={{ color: colors.faint, fontSize: 11, width: 62, textAlign: 'right' }}>
+              <Text
+                style={{
+                  color: colors.faint,
+                  fontSize: 11,
+                  width: 62,
+                  textAlign: 'right',
+                  fontVariant: ['tabular-nums'],
+                }}>
                 {r.format(r.b)}
               </Text>
             </View>
