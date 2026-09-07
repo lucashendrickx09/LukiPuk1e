@@ -145,7 +145,8 @@ export default function CatalogScreen() {
       scrollEventThrottle={16}
       contentContainerStyle={{ padding: spacing.lg, paddingBottom: 56 }}>
       <Text style={styles.hint}>
-        Tap for a quick look · hold and drag one onto another to group them
+        Tap for a quick look, and to file it in a group. Holding and dragging one tile onto another
+        groups them too.
       </Text>
 
       <CatalogGrid
