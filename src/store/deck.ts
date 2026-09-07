@@ -55,6 +55,11 @@ export const useDeck = create<DeckState>()(
       clearDeck: () => set({ cards: [], builtDay: null, progress: IDLE }),
 
       build: async (force = false) => {
+        // The persisted deck is read asynchronously, and on the web this store
+        // is only created when the Discover route loads — so the tab's focus
+        // effect can run while builtDay is still null and kick off a rebuild
+        // of a deck we already have. Wait for the stored state first.
+        await whenHydrated();
         const { progress, builtDay } = get();
         if (progress.phase !== 'idle' && progress.phase !== 'done' && progress.phase !== 'error') {
           return; // already building
@@ -133,3 +138,14 @@ export const useDeck = create<DeckState>()(
     },
   ),
 );
+
+/** Resolves once the persisted deck has been read into the store. */
+function whenHydrated(): Promise<void> {
+  if (useDeck.persist.hasHydrated()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsub = useDeck.persist.onFinishHydration(() => {
+      unsub();
+      resolve();
+    });
+  });
+}
