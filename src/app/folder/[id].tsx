@@ -15,6 +15,7 @@ export default function FolderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const folder = useFolders((s) => s.folders.find((f) => f.id === id));
   const removeSymbol = useFolders((s) => s.removeSymbol);
+  const addSymbol = useFolders((s) => s.addSymbol);
   const renameFolder = useFolders((s) => s.renameFolder);
   const deleteFolder = useFolders((s) => s.deleteFolder);
   const [editing, setEditing] = useState(false);
@@ -30,6 +31,12 @@ export default function FolderDetailScreen() {
         .filter((e): e is NonNullable<typeof e> => !!e),
     [folder, entries],
   );
+
+  /** Catalogued companies not already in this folder. */
+  const addable = useMemo(() => {
+    const here = new Set(folder?.symbols ?? []);
+    return entries.filter((e) => !here.has(e.card.symbol));
+  }, [folder, entries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,7 +74,7 @@ export default function FolderDetailScreen() {
         {stocks.length === 0 ? (
           <EmptyState
             title="No stocks in this folder"
-            body="In the Catalog, drag a company onto this folder to add it."
+            body="Add companies from your catalog below, or drag one onto this folder in the Catalog."
           />
         ) : (
           stocks.map((entry) => {
@@ -117,6 +124,34 @@ export default function FolderDetailScreen() {
             );
           })
         )}
+
+        {/* Nothing on this screen used to add a stock — the empty state just
+            pointed back to a drag gesture on another tab. */}
+        {addable.length > 0 ? (
+          <>
+            <Text style={styles.addHeading}>Add from your catalog</Text>
+            {addable.map((entry) => (
+              <TouchableOpacity
+                key={entry.card.symbol}
+                onPress={() => addSymbol(folder.id, entry.card.symbol)}
+                accessibilityRole="button"
+                accessibilityLabel={`Add ${entry.card.symbol} to ${folder.name}`}>
+                <Card style={{ marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                    <Logo uri={entry.card.profile.logo} symbol={entry.card.symbol} size={32} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sym}>{entry.card.symbol}</Text>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {entry.card.profile.name}
+                      </Text>
+                    </View>
+                    <Text style={styles.addTxt}>+ Add</Text>
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))}
+          </>
+        ) : null}
 
         <View style={styles.footer}>
           <TouchableOpacity style={styles.footerBtn} onPress={() => setRenaming(true)}>
@@ -170,6 +205,14 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   removeBtnTxt: { color: colors.red, fontSize: 13, fontWeight: '700' },
+  addHeading: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  addTxt: { color: colors.blue, fontSize: 14, fontWeight: '700' },
   footer: { marginTop: spacing.xl, gap: spacing.sm },
   footerBtn: {
     borderWidth: 1,

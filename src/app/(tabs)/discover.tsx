@@ -1,24 +1,33 @@
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SwipeDeckView } from '@/components/SwipeDeck';
-import { EmptyState, ProgressBar } from '@/components/ui';
+import { Button, EmptyState, ProgressBar } from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
 import { useDeck } from '@/store/deck';
 import { useSettings } from '@/store/settings';
-import { colors, spacing } from '@/theme';
+import { colors, radius, spacing } from '@/theme';
 import { DeckCard, SwipeDirection } from '@/types';
 import { todayKey } from '@/utils/format';
+
+/** How long the undo bar stays before the swipe is treated as final. */
+const UNDO_MS = 6000;
 
 export default function DiscoverScreen() {
   const cards = useDeck((s) => s.cards);
   const builtDay = useDeck((s) => s.builtDay);
   const progress = useDeck((s) => s.progress);
   const build = useDeck((s) => s.build);
+  const cancelBuild = useDeck((s) => s.cancelBuild);
   const consumeTopCard = useDeck((s) => s.consumeTopCard);
+  const restoreCard = useDeck((s) => s.restoreCard);
   const loadDemoDeck = useDeck((s) => s.loadDemoDeck);
   const swipe = useCatalog((s) => s.swipe);
+  const undoSwipe = useCatalog((s) => s.undoSwipe);
   const hasKey = useSettings((s) => s.hasFinnhubKey);
+
+  const [last, setLast] = useState<{ card: DeckCard; direction: SwipeDirection } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Kick off today's build when the tab gains focus and the deck is stale.
   useFocusEffect(
@@ -27,9 +36,27 @@ export default function DiscoverScreen() {
     }, [hasKey, builtDay, build]),
   );
 
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
+
+  // Every swipe says what it did and stays reversible for a few seconds. A
+  // pass locks the company out of the deck for three weeks, which used to
+  // happen silently with no way back short of wiping the whole history.
   const onSwipe = (card: DeckCard, direction: SwipeDirection) => {
     swipe(card, direction);
     consumeTopCard();
+    setLast({ card, direction });
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setLast(null), UNDO_MS);
+  };
+
+  const undo = () => {
+    if (!last) return;
+    undoSwipe(last.card.symbol);
+    restoreCard(last.card);
+    setLast(null);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
   };
 
   const building = progress.phase !== 'idle' && progress.phase !== 'done' && progress.phase !== 'error';
@@ -43,6 +70,14 @@ export default function DiscoverScreen() {
           couple of minutes on the free data tier.
         </Text>
         <ProgressBar done={progress.done} total={progress.total} message={progress.message} />
+        {/* The build has no timeout, so without this a hung network left the
+            user staring at a frozen progress bar with no way out. */}
+        <Button
+          label={cards.length > 0 ? 'Stop and use the current deck' : 'Stop'}
+          variant="ghost"
+          onPress={cancelBuild}
+          style={{ marginTop: spacing.md }}
+        />
       </View>
     );
   }
@@ -51,9 +86,10 @@ export default function DiscoverScreen() {
     return (
       <View style={styles.center}>
         <EmptyState title="Deck build failed" body={progress.message} />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => build(true)}>
-          <Text style={styles.primaryBtnTxt}>Try again</Text>
-        </TouchableOpacity>
+        <Button label="Try again" onPress={() => build(true)} />
+        {!cards.length ? (
+          <Button label="Use demo cards instead" variant="ghost" onPress={loadDemoDeck} />
+        ) : null}
       </View>
     );
   }
@@ -66,9 +102,7 @@ export default function DiscoverScreen() {
             title="No data key yet"
             body="Add a free Finnhub API key in Settings to get a real daily deck — or explore with demo cards first."
           />
-          <TouchableOpacity style={styles.primaryBtn} onPress={loadDemoDeck}>
-            <Text style={styles.primaryBtnTxt}>Try the demo deck</Text>
-          </TouchableOpacity>
+          <Button label="Try the demo deck" onPress={loadDemoDeck} />
         </View>
       );
     }
@@ -82,11 +116,10 @@ export default function DiscoverScreen() {
               : 'Build today’s deck to see which companies multiple sources agree on.'
           }
         />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => build(true)}>
-          <Text style={styles.primaryBtnTxt}>
-            {builtDay === todayKey() ? 'Rebuild deck' : 'Build deck'}
-          </Text>
-        </TouchableOpacity>
+        <Button
+          label={builtDay === todayKey() ? 'Rebuild deck' : 'Build deck'}
+          onPress={() => build(true)}
+        />
       </View>
     );
   }
@@ -98,7 +131,7 @@ export default function DiscoverScreen() {
           {cards.length} candidate{cards.length === 1 ? '' : 's'} left
           {cards[0]?.demo ? ' · demo data' : ''}
         </Text>
-        <TouchableOpacity onPress={() => build(true)}>
+        <TouchableOpacity onPress={() => build(true)} style={{ paddingVertical: 10, paddingLeft: 16 }}>
           <Text style={{ color: colors.blue, fontSize: 13, fontWeight: '600' }}>Rebuild</Text>
         </TouchableOpacity>
       </View>
@@ -107,6 +140,18 @@ export default function DiscoverScreen() {
         onSwipe={onSwipe}
         onOpenDetail={(card) => router.push(`/company/${card.symbol}`)}
       />
+      {last ? (
+        <View style={styles.undoBar}>
+          <Text style={styles.undoTxt} numberOfLines={1}>
+            {last.direction === 'right'
+              ? `${last.card.symbol} saved to Catalog`
+              : `${last.card.symbol} passed · hidden for 21 days`}
+          </Text>
+          <TouchableOpacity onPress={undo} style={styles.undoBtn} accessibilityRole="button">
+            <Text style={styles.undoAction}>Undo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -128,12 +173,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
-  primaryBtn: {
-    backgroundColor: colors.blue,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 28,
+  undoBar: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+    paddingVertical: 6,
   },
-  primaryBtnTxt: { color: '#08111E', fontWeight: '800', fontSize: 15 },
+  undoTxt: { color: colors.text, fontSize: 13, flex: 1 },
+  undoBtn: { paddingHorizontal: spacing.md, paddingVertical: 12 },
+  undoAction: { color: colors.blue, fontSize: 14, fontWeight: '800' },
 });

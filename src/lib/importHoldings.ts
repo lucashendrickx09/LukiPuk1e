@@ -186,6 +186,14 @@ export function parsePastedHoldings(text: string): ImportedHolding[] {
         break;
       }
     }
+    // Exactly two numbers is the documented shape — ticker, shares, total
+    // cost — and it is what this screen's own placeholder shows. Without this
+    // the pair fell through to "first number is the quantity", the cost was
+    // dropped, and every row imported at a zero cost basis.
+    if (!quantity && nums.length === 2 && nums[0] > 0 && nums[1] > 0) {
+      quantity = nums[0];
+      costBasis = nums[1];
+    }
     if (!quantity) {
       const q = nums.find((v) => v > 0 && v < 1e6);
       if (q != null) quantity = q;

@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { showDialog } from '@/components/Dialog';
 import { Card } from '@/components/ui';
 import {
   fetchHoldingsFromUrl,
@@ -24,7 +25,9 @@ export default function ImportPortfolioScreen() {
   const existing = usePortfolio((s) => s.positions.length);
   const [paste, setPaste] = useState('');
   const [url, setUrl] = useState('');
-  const [replace, setReplace] = useState(true);
+  // Adding is the safe default. Replacing discards every recorded position,
+  // and it used to be preselected with no confirmation on the way through.
+  const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -33,13 +36,47 @@ export default function ImportPortfolioScreen() {
     [paste],
   );
 
+  /**
+   * Commit an import, confirming first when it would discard the portfolio.
+   * Replacing cannot be undone — the previous positions are not kept anywhere.
+   */
+  const commit = (positions: ReturnType<typeof holdingsToPositions>) => {
+    const run = () => {
+      importPositions(positions, replace);
+      router.back();
+    };
+    if (replace && existing > 0) {
+      showDialog(
+        'Replace your portfolio?',
+        `This deletes all ${existing} recorded position${existing === 1 ? '' : 's'} and their purchase history, then adds the ${positions.length} imported holding${positions.length === 1 ? '' : 's'}. It cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace', style: 'destructive', onPress: run },
+        ],
+      );
+      return;
+    }
+    run();
+  };
+
   const doImport = (positions: ReturnType<typeof holdingsToPositions>) => {
     if (positions.length === 0) {
       setMsg({ ok: false, text: 'No holdings found — paste rows that start with a ticker symbol.' });
       return;
     }
-    importPositions(positions, replace);
-    router.back();
+    const noCost = positions.filter((p) => !p.buyPrice).length;
+    if (noCost > 0) {
+      showDialog(
+        'No purchase price found',
+        `${noCost} of ${positions.length} row${positions.length === 1 ? '' : 's'} have no cost, so gain and loss will read as if you paid nothing. Add a cost column, or import anyway and edit later.`,
+        [
+          { text: 'Back to editing', style: 'cancel' },
+          { text: 'Import anyway', onPress: () => commit(positions) },
+        ],
+      );
+      return;
+    }
+    commit(positions);
   };
 
   const fromSheet = async () => {
@@ -50,8 +87,7 @@ export default function ImportPortfolioScreen() {
       const holdings = await fetchHoldingsFromUrl(url.trim());
       const positions = holdingsToPositions(holdings);
       if (positions.length === 0) throw new Error('No holdings with shares were found.');
-      importPositions(positions, replace);
-      router.back();
+      commit(positions);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : 'Import failed.' });
     } finally {

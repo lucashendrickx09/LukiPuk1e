@@ -21,6 +21,14 @@ interface SettingsState {
   hasAnthropicKey: boolean;
   /** Portfolio holdings sort order. */
   sortKey: SortKey;
+  /**
+   * Which change every holding row shows. One tap on the header pill flips
+   * the whole list, the way Apple Stocks flips its change column, instead of
+   * leaving an unlabelled percentage that could be either.
+   */
+  homeMetric: 'today' | 'total';
+  /** Range shown on the portfolio value chart. */
+  homeRange: '1M' | '3M' | '6M' | '1Y';
   set: (partial: Partial<Omit<SettingsState, 'set'>>) => void;
 }
 
@@ -38,6 +46,8 @@ export const useSettings = create<SettingsState>()(
       hasFinnhubKey: false,
       hasAnthropicKey: false,
       sortKey: 'value',
+      homeMetric: 'today',
+      homeRange: '3M',
       set: (partial) => set(partial),
     }),
     {

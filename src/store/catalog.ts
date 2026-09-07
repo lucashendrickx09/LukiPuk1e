@@ -13,6 +13,8 @@ interface CatalogState {
   entries: CatalogEntry[];
   swipes: SwipeRecord[];
   swipe: (card: DeckCard, direction: 'left' | 'right') => void;
+  /** Reverse the most recent swipe on a symbol — see `undoSwipe`. */
+  undoSwipe: (symbol: string) => void;
   removeFromCatalog: (symbol: string) => void;
   catalogSymbols: () => string[];
   cooldownSymbols: () => string[];
@@ -42,6 +44,36 @@ export const useCatalog = create<CatalogState>()(
               ? [{ card, addedAt: record.at }, ...s.entries]
               : s.entries,
         }));
+      },
+
+      /**
+       * Undo the last swipe on a symbol.
+       *
+       * A left swipe locks a company out of the deck for three weeks and a
+       * right swipe files it in the catalog; both used to be unreachable from
+       * the deck, so a mis-swipe could only be fixed by wiping the entire
+       * swipe history. This drops the swipe record and, for a right swipe,
+       * the catalog entry it created.
+       */
+      undoSwipe: (symbol) => {
+        const swipes = get().swipes;
+        let last = -1;
+        for (let i = swipes.length - 1; i >= 0; i--) {
+          if (swipes[i].symbol === symbol) {
+            last = i;
+            break;
+          }
+        }
+        if (last === -1) return;
+        const record = swipes[last];
+        set((s) => ({
+          swipes: s.swipes.filter((_, i) => i !== last),
+          entries:
+            record.direction === 'right'
+              ? s.entries.filter((e) => e.card.symbol !== symbol)
+              : s.entries,
+        }));
+        if (record.direction === 'right') useFolders.getState().pruneSymbol(symbol);
       },
 
       removeFromCatalog: (symbol) => {

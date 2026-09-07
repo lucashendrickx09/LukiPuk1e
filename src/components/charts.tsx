@@ -1,7 +1,13 @@
-import React from 'react';
-import { Text, View } from 'react-native';
-import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
-import { chartPalette, colors } from '@/theme';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  GestureResponderEvent,
+  PanResponder,
+  Platform,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Circle, Line, Path, Polyline, Rect } from 'react-native-svg';
+import { chartPalette, colors, plColor, radius, spacing, tabular } from '@/theme';
 
 // Hand-rolled SVG charts — no chart library, so they work identically on
 // iOS, Android, and the web preview.
@@ -36,17 +42,352 @@ export function Sparkline({
   );
 }
 
+/**
+ * A chart you can press and hold to read.
+ *
+ * The scrubbed value does NOT get a tooltip: `onScrub` reports the index and
+ * the caller swaps its own big header number. A tooltip would sit under the
+ * finger; the header is large, fixed, and never covered.
+ *
+ * Gesture rules, which matter because this lives inside a page that scrolls:
+ * a horizontal drag scrubs, a vertical drag scrolls the page, and holding
+ * still for a moment also starts a scrub. While scrubbing on the web the
+ * page scroll is suppressed with a non-passive touchmove listener, the only
+ * thing that stops an in-flight browser scroll.
+ */
+export function InteractiveChart({
+  values,
+  dates,
+  width,
+  height = 180,
+  loading,
+  emptyText = 'No history available',
+  onScrub,
+  color,
+  baseline,
+}: {
+  values: number[];
+  /** Same length as values; used only by the caller for its own label. */
+  dates?: string[];
+  width: number;
+  height?: number;
+  loading?: boolean;
+  emptyText?: string;
+  onScrub?: (index: number | null) => void;
+  color?: string;
+  /** Value the line is coloured against. Defaults to the first point. */
+  baseline?: number;
+}) {
+  const [scrub, setScrub] = useState<number | null>(null);
+  const originX = useRef(0);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armed = useRef(false);
+  const blocker = useRef<((e: Event) => void) | null>(null);
+  const releaseGuard = useRef<(() => void) | null>(null);
+  const scrubRef = useRef<number | null>(null);
+  const boxRef = useRef<View>(null);
+
+  const n = values.length;
+  const plotH = height - 16;
+  const px = useCallback((i: number) => (n < 2 ? 0 : (i / (n - 1)) * (width - 8) + 4), [n, width]);
+
+  const { min, max } = useMemo(() => {
+    if (!n) return { min: 0, max: 1 };
+    return { min: Math.min(...values), max: Math.max(...values) };
+  }, [values, n]);
+  const range = max - min || 1;
+  const py = useCallback(
+    (v: number) => plotH - 6 - ((v - min) / range) * (plotH - 16),
+    [plotH, min, range],
+  );
+
+  const indexFor = useCallback(
+    (pageX: number) => {
+      if (n < 2) return 0;
+      const local = pageX - originX.current;
+      const frac = (local - 4) / Math.max(1, width - 8);
+      return Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1))));
+    },
+    [n, width],
+  );
+
+  // Stop the browser from scrolling the page under a scrub. touch-action is
+  // evaluated when the gesture starts, so it cannot help once a scroll is
+  // already in flight — only a non-passive preventDefault can.
+  const lockPage = useCallback(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || blocker.current) return;
+    const block = (e: Event) => e.preventDefault();
+    blocker.current = block;
+    document.addEventListener('touchmove', block, { passive: false });
+  }, []);
+  const unlockPage = useCallback(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !blocker.current) return;
+    document.removeEventListener('touchmove', blocker.current);
+    blocker.current = null;
+  }, []);
+
+  /**
+   * End a scrub. Safe to call twice.
+   *
+   * This must not depend on the PanResponder having been granted: a press and
+   * hold that never moves arms the scrub from the hold timer alone, and if
+   * the finger then lifts, no responder callback fires. Without an
+   * independent end the chart stayed scrubbed and the page stayed
+   * scroll-locked for good.
+   */
+  const endScrub = useCallback(() => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    if (releaseGuard.current) {
+      releaseGuard.current();
+      releaseGuard.current = null;
+    }
+    if (!armed.current && scrubRef.current === null) {
+      unlockPage();
+      return;
+    }
+    armed.current = false;
+    unlockPage();
+    setScrub(null);
+    onScrub?.(null);
+  }, [onScrub, unlockPage]);
+
+  // The finger can leave the element (or the window) before it lifts, so the
+  // end of the gesture is also watched globally while a scrub is live.
+  const watchRelease = useCallback(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || releaseGuard.current) return;
+    const end = () => endScrub();
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
+    window.addEventListener('mouseup', end);
+    releaseGuard.current = () => {
+      window.removeEventListener('touchend', end);
+      window.removeEventListener('touchcancel', end);
+      window.removeEventListener('mouseup', end);
+    };
+  }, [endScrub]);
+
+  const moveScrub = useCallback(
+    (pageX: number) => {
+      const i = indexFor(pageX);
+      scrubRef.current = i;
+      setScrub(i);
+      onScrub?.(i);
+    },
+    [indexFor, onScrub],
+  );
+
+  // Release the page lock and the global listeners if the chart unmounts
+  // mid-scrub — otherwise the whole page stays unscrollable.
+  useEffect(
+    () => () => {
+      unlockPage();
+      releaseGuard.current?.();
+      releaseGuard.current = null;
+    },
+    [unlockPage],
+  );
+
+  const responder = useMemo(
+    () =>
+      PanResponder.create({
+        // Never claim the touch outright — a plain tap and a vertical scroll
+        // must both still reach the page.
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: (e: GestureResponderEvent) => {
+          const { pageX } = e.nativeEvent;
+          if (holdTimer.current) clearTimeout(holdTimer.current);
+          watchRelease();
+          holdTimer.current = setTimeout(() => {
+            armed.current = true;
+            lockPage();
+            moveScrub(pageX);
+          }, 180);
+          return false;
+        },
+        onMoveShouldSetPanResponder: (_e, g) => {
+          if (armed.current) return true;
+          const horizontal = Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy);
+          if (!horizontal && holdTimer.current) {
+            // Moved vertically first — this is a page scroll, not a read.
+            clearTimeout(holdTimer.current);
+            holdTimer.current = null;
+          }
+          return horizontal;
+        },
+        onPanResponderGrant: (e: GestureResponderEvent) => {
+          armed.current = true;
+          lockPage();
+          watchRelease();
+          moveScrub(e.nativeEvent.pageX);
+        },
+        onPanResponderMove: (e: GestureResponderEvent) => moveScrub(e.nativeEvent.pageX),
+        onPanResponderRelease: endScrub,
+        onPanResponderTerminate: endScrub,
+        onPanResponderTerminationRequest: () => !armed.current,
+      }),
+    [endScrub, lockPage, moveScrub, watchRelease],
+  );
+
+  if (loading) {
+    return (
+      <View style={{ width, height, justifyContent: 'flex-end' }}>
+        <View
+          style={{
+            height: 2,
+            backgroundColor: colors.surfaceAlt,
+            marginBottom: plotH / 2,
+            borderRadius: 1,
+          }}
+        />
+        <Text style={{ color: colors.faint, fontSize: 12, textAlign: 'center' }}>
+          Loading price history…
+        </Text>
+      </View>
+    );
+  }
+
+  if (n < 2) {
+    return (
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: colors.faint, fontSize: 12 }}>{emptyText}</Text>
+      </View>
+    );
+  }
+
+  const base = baseline ?? values[0];
+  const up = values[n - 1] >= base;
+  const stroke = color ?? (up ? colors.green : colors.red);
+
+  let d = `M ${px(0)} ${py(values[0])}`;
+  for (let i = 1; i < n; i++) d += ` L ${px(i)} ${py(values[i])}`;
+  const area = `${d} L ${px(n - 1)} ${plotH} L ${px(0)} ${plotH} Z`;
+  // A range change can leave the last scrub index past the end of the new
+  // series; treat that as no scrub rather than reading undefined.
+  const live = scrub !== null && values[scrub] !== undefined ? scrub : null;
+  const sx = live === null ? null : px(live);
+  const sy = live === null ? null : py(values[live]);
+
+  return (
+    <View
+      ref={boxRef}
+      collapsable={false}
+      onLayout={() => {
+        boxRef.current?.measureInWindow?.((x) => {
+          originX.current = x;
+        });
+      }}
+      {...responder.panHandlers}
+      // Tell the browser we may handle horizontal movement ourselves while
+      // still allowing a vertical flick to scroll the page.
+      {...(Platform.OS === 'web' ? { dataSet: { chart: 'scrub' } } : null)}
+      style={{ width, height, ...(Platform.OS === 'web' ? { touchAction: 'pan-y' } : null) }}>
+      <Svg width={width} height={plotH}>
+        <Path d={area} fill={stroke + '22'} />
+        <Path d={d} fill="none" stroke={stroke} strokeWidth={2} />
+        {sx !== null && sy !== null ? (
+          <>
+            {/* Behind the line, muted — a reading aid, not a second series. */}
+            <Line x1={sx} y1={0} x2={sx} y2={plotH} stroke={colors.faint} strokeWidth={1} opacity={0.55} />
+            <Circle cx={sx} cy={sy} r={4.5} fill={stroke} stroke={colors.bg} strokeWidth={2} />
+          </>
+        ) : (
+          <Circle cx={px(n - 1)} cy={py(values[n - 1])} r={3} fill={stroke} />
+        )}
+      </Svg>
+      {/* The range start, only when idle. While scrubbing the caller's header
+          already carries the date, and printing it twice is noise. */}
+      {dates && dates.length === n && live === null ? (
+        <Text
+          style={{
+            color: colors.faint,
+            fontSize: 11,
+            textAlign: 'center',
+            marginTop: 2,
+            ...tabular,
+          }}>
+          {dates[0]} → today
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Time-range picker. Fixed set, equal widths, full 44pt targets — Apple caps
+ * a segmented control at about five segments on a phone and these are five.
+ */
+export function RangePills<T extends string>({
+  ranges,
+  value,
+  onChange,
+  accent = colors.blue,
+}: {
+  ranges: readonly T[];
+  value: T;
+  onChange: (r: T) => void;
+  accent?: string;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 6 }}>
+      {ranges.map((r) => {
+        const active = r === value;
+        return (
+          <View key={r} style={{ flex: 1 }}>
+            <Text
+              accessibilityRole="button"
+              accessibilityState={active ? { selected: true } : {}}
+              onPress={() => onChange(r)}
+              style={{
+                textAlign: 'center',
+                paddingVertical: 13,
+                borderRadius: radius.sm,
+                overflow: 'hidden',
+                backgroundColor: active ? accent : colors.surfaceAlt,
+                color: active ? '#08111E' : colors.muted,
+                fontSize: 13,
+                fontWeight: '700',
+              }}>
+              {r}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** The scrubbed value plus its change from the range baseline. */
+export function scrubReadout(
+  values: number[],
+  index: number | null,
+): { value: number; changePct: number } | null {
+  if (index === null || index < 0 || index >= values.length) return null;
+  const base = values[0];
+  const v = values[index];
+  return { value: v, changePct: base ? ((v - base) / base) * 100 : 0 };
+}
+
 export function LineChart({
   values,
   labels,
   width,
   height = 160,
+  loading,
 }: {
   values: number[];
   labels?: { left: string; right: string };
   width: number;
   height?: number;
+  loading?: boolean;
 }) {
+  if (loading) {
+    return (
+      <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: colors.faint, fontSize: 12 }}>Loading price history…</Text>
+      </View>
+    );
+  }
   if (values.length < 2) {
     return (
       <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>

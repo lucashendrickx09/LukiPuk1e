@@ -22,6 +22,8 @@ interface AnalyticsState {
   computedAt: number | null;
   computing: boolean;
   status: string;
+  /** Set when the last compute failed, so the screen can offer a retry. */
+  error: string | null;
   compute: (force?: boolean) => Promise<void>;
 }
 
@@ -32,6 +34,7 @@ export const useAnalytics = create<AnalyticsState>()(
       computedAt: null,
       computing: false,
       status: '',
+      error: null,
 
       compute: async (force = false) => {
         if (get().computing) return;
@@ -44,7 +47,7 @@ export const useAnalytics = create<AnalyticsState>()(
           get().result && get().computedAt && Date.now() - (get().computedAt as number) < STALE_MS;
         if (!force && fresh) return;
 
-        set({ computing: true });
+        set({ computing: true, error: null });
         try {
           const syms = [...new Set(positions.map((p) => p.symbol))];
           const market = useMarket.getState();
@@ -89,9 +92,15 @@ export const useAnalytics = create<AnalyticsState>()(
             candlesBySymbol,
             benchmark,
           });
-          set({ result, computedAt: Date.now(), computing: false, status: '' });
-        } catch {
-          set({ computing: false, status: '' });
+          set({ result, computedAt: Date.now(), computing: false, status: '', error: null });
+        } catch (e) {
+          // Leaving `result` null with no error left the screen on an
+          // indefinite spinner with nothing to retry.
+          set({
+            computing: false,
+            status: '',
+            error: e instanceof Error ? e.message : 'Could not compute analytics.',
+          });
         }
       },
     }),

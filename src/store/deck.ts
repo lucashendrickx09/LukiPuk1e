@@ -16,12 +16,24 @@ interface DeckState {
   builtDay: string | null; // YYYY-MM-DD of the last successful build
   progress: BuildProgress;
   consumeTopCard: () => void;
+  /** Put a swiped card back on top of the deck (undo). */
+  restoreCard: (card: DeckCard) => void;
   build: (force?: boolean) => Promise<void>;
+  /** Abandon the build in flight and return to the deck. */
+  cancelBuild: () => void;
   loadDemoDeck: () => void;
   clearDeck: () => void;
 }
 
 const IDLE: BuildProgress = { phase: 'idle', done: 0, total: 0, message: '' };
+
+/**
+ * Identifies the build in flight. Cancelling bumps it, so the run that was
+ * abandoned drops its results instead of overwriting the deck later. The
+ * network calls it already made are left to finish and be discarded — the
+ * point is that the user is never trapped on the progress screen.
+ */
+let buildToken = 0;
 
 function notifyDeckReady(count: number) {
   if (count <= 0) return;
@@ -42,6 +54,13 @@ export const useDeck = create<DeckState>()(
       progress: IDLE,
 
       consumeTopCard: () => set((s) => ({ cards: s.cards.slice(1) })),
+
+      restoreCard: (card) =>
+        set((s) =>
+          s.cards.some((c) => c.symbol === card.symbol)
+            ? s
+            : { cards: [card, ...s.cards] },
+        ),
 
       loadDemoDeck: () => {
         const { cooldownActive, catalogSymbols } = useCatalog.getState();
@@ -98,7 +117,10 @@ export const useDeck = create<DeckState>()(
           excludedSymbols: excluded,
           swipes: catalog.swipes,
         };
-        const onProgress = (p: BuildProgress) => set({ progress: p });
+        const token = ++buildToken;
+        const onProgress = (p: BuildProgress) => {
+          if (token === buildToken) set({ progress: p });
+        };
         try {
           let cards: DeckCard[];
           if (anthropicKey) {
@@ -113,9 +135,11 @@ export const useDeck = create<DeckState>()(
           } else {
             cards = await buildDeck(cfg, onProgress);
           }
+          if (token !== buildToken) return; // cancelled while it ran
           set({ cards, builtDay: todayKey(), progress: IDLE });
           notifyDeckReady(cards.length);
         } catch (e) {
+          if (token !== buildToken) return;
           set({
             progress: {
               phase: 'error',
@@ -125,6 +149,11 @@ export const useDeck = create<DeckState>()(
             },
           });
         }
+      },
+
+      cancelBuild: () => {
+        buildToken++;
+        set({ progress: IDLE });
       },
     }),
     {

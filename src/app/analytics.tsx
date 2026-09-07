@@ -20,7 +20,7 @@ import {
   HBar,
   LineChart,
 } from '@/components/charts';
-import { Card, EmptyState, SectionTitle } from '@/components/ui';
+import { Button, Card, EmptyState, SectionTitle } from '@/components/ui';
 import { useAnalytics } from '@/store/analytics';
 import { usePortfolio } from '@/store/portfolio';
 import { colors, spacing } from '@/theme';
@@ -69,6 +69,7 @@ export default function AnalyticsScreen() {
   const result = useAnalytics((s) => s.result);
   const computing = useAnalytics((s) => s.computing);
   const status = useAnalytics((s) => s.status);
+  const error = useAnalytics((s) => s.error);
   const [sheet, setSheet] = useState<{ title: string; value: string; body: string } | null>(null);
 
   // Shows the cached result instantly; refreshes in the background if stale.
@@ -113,6 +114,23 @@ export default function AnalyticsScreen() {
         <Stack.Screen options={{ title: 'Analytics' }} />
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <EmptyState title="Nothing to analyse yet" body="Add or import holdings, then come back for the full risk and diversification breakdown." />
+        </View>
+      </>
+    );
+  }
+
+  // A failed run used to leave this screen spinning forever with nothing to
+  // retry, because the catch cleared `computing` but never set `result`.
+  if (!result && error && !computing) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Analytics' }} />
+        <View style={styles.center}>
+          <EmptyState
+            title="Could not compute analytics"
+            body={`${error}\n\nThis needs price history for each holding, which the free source often blocks in the browser.`}
+          />
+          <Button label="Try again" onPress={() => useAnalytics.getState().compute(true)} />
         </View>
       </>
     );

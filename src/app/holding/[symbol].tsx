@@ -1,7 +1,9 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,24 +14,27 @@ import {
 } from 'react-native';
 import { fetchDailyCandles, lastNCandles, pctReturn } from '@/api/stooq';
 import { showDialog } from '@/components/Dialog';
-import { LineChart } from '@/components/charts';
+import { InteractiveChart, RangePills } from '@/components/charts';
 import { ConfidenceMeter, VerdictChip } from '@/components/research';
-import { Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, Logo, PctText, SectionTitle } from '@/components/ui';
 import { buildHoldings } from '@/lib/holdings';
 import { useMarket } from '@/store/market';
 import { usePortfolio } from '@/store/portfolio';
 import { useResearch } from '@/store/research';
-import { colors, plColor, radius, spacing } from '@/theme';
+import { colors, plColor, radius, spacing, tabular } from '@/theme';
 import { Candle } from '@/types';
-import { capTierLabel, fmtCompact, fmtMoney, fmtPct } from '@/utils/format';
+import { capTierLabel, fmtCompact, fmtMoney, fmtMoneySigned, fmtPct } from '@/utils/format';
 import { capTierOf } from '@/utils/format';
 
-const RANGES = [
-  { label: '1M', days: 21 },
-  { label: '3M', days: 63 },
-  { label: '6M', days: 126 },
-  { label: '1Y', days: 252 },
-] as const;
+const RANGE_DAYS = { '1M': 21, '3M': 63, '6M': 126, '1Y': 252 } as const;
+type RangeKey = keyof typeof RANGE_DAYS;
+const RANGE_KEYS = ['1M', '3M', '6M', '1Y'] as const;
+const RANGE_WORD: Record<RangeKey, string> = {
+  '1M': 'past month',
+  '3M': 'past 3 months',
+  '6M': 'past 6 months',
+  '1Y': 'past year',
+};
 
 export default function HoldingDetailScreen() {
   const { width } = useWindowDimensions();
@@ -43,7 +48,9 @@ export default function HoldingDetailScreen() {
   const report = useResearch((s) => (symbol ? s.reports[symbol] : undefined));
 
   const [candles, setCandles] = useState<Candle[] | null>(null);
-  const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[1]);
+  const [loadingCandles, setLoadingCandles] = useState(true);
+  const [range, setRange] = useState<RangeKey>('3M');
+  const [scrub, setScrub] = useState<number | null>(null);
   const [trade, setTrade] = useState<'buy' | 'sell' | null>(null);
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
@@ -55,17 +62,27 @@ export default function HoldingDetailScreen() {
   );
 
   useEffect(() => {
-    if (symbol) {
-      fetchDailyCandles(symbol).then(setCandles);
-      useMarket.getState().refreshQuotes([symbol]);
-      useMarket.getState().ensureProfiles([symbol]);
-    }
+    if (!symbol) return;
+    let live = true;
+    setLoadingCandles(true);
+    fetchDailyCandles(symbol).then((c) => {
+      if (!live) return;
+      setCandles(c);
+      setLoadingCandles(false);
+    });
+    useMarket.getState().refreshQuotes([symbol]);
+    useMarket.getState().ensureProfiles([symbol]);
+    return () => {
+      live = false;
+    };
   }, [symbol]);
 
-  const series = useMemo(
-    () => (candles ? lastNCandles(candles, range.days).map((c) => c.close) : []),
+  const windowed = useMemo(
+    () => (candles ? lastNCandles(candles, RANGE_DAYS[range]) : []),
     [candles, range],
   );
+  const series = useMemo(() => windowed.map((c) => c.close), [windowed]);
+  const seriesDates = useMemo(() => windowed.map((c) => c.date), [windowed]);
 
   if (!holding) {
     return (
@@ -90,10 +107,28 @@ export default function HoldingDetailScreen() {
     if (!isFinite(n) || n <= 0) return setErr('Enter a share count greater than zero.');
     if (trade === 'sell') {
       if (n > holding.shares + 1e-9) return setErr(`You only hold ${holding.shares} shares.`);
-      sellShares(holding.symbol, n);
-      setTrade(null);
-      // Selling everything leaves nothing to show.
-      if (n >= holding.shares - 1e-9) router.back();
+      const all = n >= holding.shares - 1e-9;
+      const proceeds = n * holding.price;
+      // Selling rewrites or deletes lots oldest-first and cannot be undone,
+      // so it gets the same confirmation that removing the holding does.
+      showDialog(
+        all ? `Sell all ${holding.symbol}?` : `Sell ${n} ${holding.symbol}?`,
+        all
+          ? `This closes the position: ${holding.shares} shares at about ${fmtMoney(holding.price)}, roughly ${fmtMoney(proceeds)}. The holding and its purchase history leave your portfolio.`
+          : `This sells ${n} of your ${holding.shares} shares at about ${fmtMoney(holding.price)}, roughly ${fmtMoney(proceeds)}. The oldest lots are sold first and cannot be restored.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: all ? 'Sell all' : 'Sell',
+            style: 'destructive',
+            onPress: () => {
+              sellShares(holding.symbol, n);
+              setTrade(null);
+              if (all) router.back();
+            },
+          },
+        ],
+      );
       return;
     }
     const p = parseFloat(price);
@@ -119,6 +154,14 @@ export default function HoldingDetailScreen() {
       ],
     );
 
+  // While scrubbing the header shows that day's close and its move from the
+  // start of the visible range; otherwise the live price and today's move.
+  const scrubPrice = scrub !== null && series[scrub] !== undefined ? series[scrub] : null;
+  const headerPct =
+    scrubPrice !== null && series[0]
+      ? ((scrubPrice - series[0]) / series[0]) * 100
+      : holding.dayChangePct;
+
   const r1m = candles ? pctReturn(candles, 21) : null;
   const r3m = candles ? pctReturn(candles, 63) : null;
   const r1y = candles ? pctReturn(candles, 252) : null;
@@ -128,8 +171,8 @@ export default function HoldingDetailScreen() {
     ['Avg cost', fmtMoney(holding.avgCost)],
     ['Invested', fmtMoney(holding.cost, 0)],
     ['Market value', fmtMoney(holding.value, 0)],
-    ['Today', fmtMoney(holding.dayChange, 2), 'day'],
-    ['Total P/L', fmtMoney(holding.pl, 2), 'pl'],
+    ['Today', fmtMoneySigned(holding.dayChange, 2), 'day'],
+    ['Total P/L', fmtMoneySigned(holding.pl, 2), 'pl'],
     ['1M', r1m !== null ? fmtPct(r1m) : '–'],
     ['3M', r3m !== null ? fmtPct(r3m) : '–'],
     ['1Y', r1y !== null ? fmtPct(r1y) : '–'],
@@ -149,22 +192,60 @@ export default function HoldingDetailScreen() {
               {holding.symbol} · {holding.sector}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.price}>{fmtMoney(holding.price)}</Text>
-            <PctText value={holding.dayChangePct} size={13} />
-          </View>
         </View>
 
-        {/* Position value + P/L */}
+        {/* Price, then the chart that reads it. Holding the chart swaps these
+            two lines rather than putting a tooltip under your finger. */}
         <Card style={{ marginTop: spacing.lg }}>
+          <Text style={styles.valueLabel}>
+            {scrubPrice !== null ? seriesDates[scrub as number] : 'Price'}
+          </Text>
+          <Text style={styles.value}>{fmtMoney(scrubPrice ?? holding.price)}</Text>
+          <Text style={{ color: plColor(headerPct), fontSize: 15, fontWeight: '700', marginTop: 2 }}>
+            {fmtPct(headerPct)} {scrubPrice !== null ? RANGE_WORD[range] : 'today'}
+          </Text>
+
+          {series.length > 1 || loadingCandles ? (
+            <>
+              <View style={{ marginTop: spacing.md }}>
+                <InteractiveChart
+                  values={series}
+                  dates={seriesDates}
+                  width={width - spacing.lg * 4}
+                  height={190}
+                  loading={loadingCandles}
+                  onScrub={setScrub}
+                />
+              </View>
+              <View style={{ marginTop: spacing.sm }}>
+                <RangePills
+                  ranges={RANGE_KEYS}
+                  value={range}
+                  onChange={(r) => {
+                    setScrub(null);
+                    setRange(r);
+                  }}
+                />
+              </View>
+            </>
+          ) : (
+            <Text style={styles.note}>
+              No price history — the free history source is often blocked in the browser. It works
+              in the native app build.
+            </Text>
+          )}
+        </Card>
+
+        {/* Your position — the numbers that are only true for you. */}
+        <Card>
           <Text style={styles.valueLabel}>Your position</Text>
           <Text style={styles.value}>{fmtMoney(holding.value)}</Text>
           <View style={{ flexDirection: 'row', gap: spacing.lg, marginTop: 4 }}>
-            <Text style={{ color: plColor(holding.dayChange), fontSize: 14, fontWeight: '600' }}>
-              {fmtMoney(holding.dayChange)} today
+            <Text style={{ color: plColor(holding.dayChange), fontSize: 14, fontWeight: '600', ...tabular }}>
+              {fmtMoneySigned(holding.dayChange)} today
             </Text>
-            <Text style={{ color: plColor(holding.pl), fontSize: 14, fontWeight: '600' }}>
-              {fmtMoney(holding.pl)} ({fmtPct(holding.plPct)})
+            <Text style={{ color: plColor(holding.pl), fontSize: 14, fontWeight: '600', ...tabular }}>
+              {fmtMoneySigned(holding.pl)} ({fmtPct(holding.plPct)})
             </Text>
           </View>
           {holding.marketCapM ? (
@@ -174,51 +255,21 @@ export default function HoldingDetailScreen() {
           ) : null}
         </Card>
 
-        {/* Price history */}
-        <Card>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
-            {RANGES.map((r) => (
-              <TouchableOpacity
-                key={r.label}
-                style={[styles.rangeBtn, range.label === r.label && styles.rangeActive]}
-                onPress={() => setRange(r)}>
-                <Text
-                  style={{
-                    color: range.label === r.label ? '#08111E' : colors.muted,
-                    fontSize: 12,
-                    fontWeight: '700',
-                  }}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <LineChart
-            values={series}
-            width={width - spacing.lg * 4}
-            height={180}
-            labels={
-              candles && series.length > 1
-                ? { left: lastNCandles(candles, range.days)[0]?.date ?? '', right: 'today' }
-                : undefined
-            }
-          />
-          {series.length < 2 ? (
-            <Text style={styles.note}>
-              Price history isn’t loading here (the free history source is often blocked in the
-              browser). It works in the native app build.
-            </Text>
-          ) : null}
-        </Card>
-
         {/* Buy / Sell */}
-        <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          <TouchableOpacity style={[styles.action, { backgroundColor: colors.green }]} onPress={() => openTrade('buy')}>
-            <Text style={styles.actionTxt}>Buy more</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.action, { backgroundColor: colors.red }]} onPress={() => openTrade('sell')}>
-            <Text style={styles.actionTxt}>Sell</Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm }}>
+          <Button
+            label="Buy more"
+            tone={colors.green}
+            onPress={() => openTrade('buy')}
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="Sell"
+            variant="secondary"
+            tone={colors.red}
+            onPress={() => openTrade('sell')}
+            style={{ flex: 1 }}
+          />
         </View>
 
         {/* Deep research verdict, when this position has been researched. */}
@@ -236,9 +287,13 @@ export default function HoldingDetailScreen() {
             </Card>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.researchBtn} onPress={() => router.push('/research')}>
-            <Text style={styles.researchBtnTxt}>Deep research this position</Text>
-          </TouchableOpacity>
+          <Button
+            label="Deep research this position"
+            variant="secondary"
+            tone={colors.purple}
+            onPress={() => router.push('/research')}
+            style={{ marginTop: spacing.md }}
+          />
         )}
 
         <SectionTitle>Stats</SectionTitle>
@@ -285,7 +340,11 @@ export default function HoldingDetailScreen() {
 
       {/* Trade sheet */}
       <Modal visible={trade !== null} transparent animationType="slide" onRequestClose={() => setTrade(null)}>
-        <View style={styles.sheetBg}>
+        {/* Without this the sheet sits exactly where the keyboard appears, so
+            the amount field, the error line and both buttons are covered. */}
+        <KeyboardAvoidingView
+          style={styles.sheetBg}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <View style={styles.handle} />
             <Text style={styles.sheetTitle}>
@@ -327,19 +386,22 @@ export default function HoldingDetailScreen() {
             {err ? <Text style={styles.err}>{err}</Text> : null}
 
             <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
-              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: colors.surfaceAlt }]} onPress={() => setTrade(null)}>
-                <Text style={{ color: colors.muted, fontWeight: '700' }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sheetBtn, { backgroundColor: trade === 'buy' ? colors.green : colors.red }]}
-                onPress={submitTrade}>
-                <Text style={{ color: '#08111E', fontWeight: '800' }}>
-                  {trade === 'buy' ? 'Add shares' : 'Sell shares'}
-                </Text>
-              </TouchableOpacity>
+              <Button
+                label="Cancel"
+                variant="ghost"
+                tone={colors.muted}
+                onPress={() => setTrade(null)}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label={trade === 'buy' ? 'Add shares' : 'Sell shares'}
+                tone={trade === 'buy' ? colors.green : colors.red}
+                onPress={submitTrade}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

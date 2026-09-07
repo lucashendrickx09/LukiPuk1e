@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   PanResponder,
@@ -26,20 +26,41 @@ export function SwipeDeckView({
 }) {
   const { width } = useWindowDimensions();
   const pan = useRef(new Animated.ValueXY()).current;
+  const flying = useRef(false);
   const top = cards[0];
   const next = cards[1];
 
+  // The card is released when the deck changes, so a new top card is always
+  // interactive even if the previous animation was interrupted.
+  useEffect(() => {
+    flying.current = false;
+    pan.setValue({ x: 0, y: 0 });
+  }, [top?.symbol, pan]);
+
+  /**
+   * Send the top card away and report it.
+   *
+   * Two guards matter here. `flying` rejects a second trigger while the first
+   * is still animating: without it a double-tap started a second animation,
+   * which stopped the first, whose callback then fired against a stale `top`
+   * — recording the same company twice and silently discarding the card
+   * underneath it, unseen and unrecorded. And `finished` is checked because
+   * an interrupted animation still calls back.
+   */
   const flyOut = (direction: SwipeDirection) => {
-    if (!top) return;
+    if (!top || flying.current) return;
+    flying.current = true;
+    const card = top;
     Animated.timing(pan, {
       toValue: { x: direction === 'right' ? width * 1.3 : -width * 1.3, y: 0 },
       duration: 220,
       // JS driver throughout: the PanResponder writes to `pan` from JS, and a
       // value touched by the native driver can't be JS-driven afterwards.
       useNativeDriver: false,
-    }).start(() => {
+    }).start(({ finished }) => {
+      if (!finished) return;
       pan.setValue({ x: 0, y: 0 });
-      onSwipe(top, direction);
+      onSwipe(card, direction);
     });
   };
 
@@ -47,7 +68,7 @@ export function SwipeDeckView({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_e, g) =>
-          Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
+          !flying.current && Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy),
         onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
           useNativeDriver: false,
         }),
@@ -108,16 +129,25 @@ export function SwipeDeckView({
           </Animated.View>
         </Animated.View>
       </View>
+      {/* Labelled buttons, not bare glyphs: a path gesture is undiscoverable
+          and unusable with assistive input, so each swipe has an equivalent
+          button that says what it does. */}
       <View style={styles.actions}>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Pass on ${top.symbol}`}
           style={[styles.actionBtn, { borderColor: colors.red }]}
           onPress={() => flyOut('left')}>
           <Text style={[styles.actionTxt, { color: colors.red }]}>✕</Text>
+          <Text style={[styles.actionLabel, { color: colors.red }]}>Pass</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Save ${top.symbol} to catalog`}
           style={[styles.actionBtn, { borderColor: colors.green }]}
           onPress={() => flyOut('right')}>
           <Text style={[styles.actionTxt, { color: colors.green }]}>✓</Text>
+          <Text style={[styles.actionLabel, { color: colors.green }]}>Catalog</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -222,17 +252,21 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.xl * 2,
+    gap: spacing.lg,
     paddingVertical: spacing.lg,
   },
   actionBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    minWidth: 104,
+    minHeight: 56,
+    borderRadius: 28,
     borderWidth: 2,
+    flexDirection: 'row',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.surface,
   },
-  actionTxt: { fontSize: 26, fontWeight: '800' },
+  actionTxt: { fontSize: 20, fontWeight: '800' },
+  actionLabel: { fontSize: 14, fontWeight: '700' },
 });

@@ -10,9 +10,18 @@ import {
   View,
 } from 'react-native';
 import { fetchDailyCandles, lastNCandles } from '@/api/stooq';
-import { LineChart } from '@/components/charts';
+import { InteractiveChart, RangePills } from '@/components/charts';
 import { BulletList, ConfidenceMeter, Paragraphs, VerdictChip } from '@/components/research';
-import { Card, Chip, EmptyState, Logo, PctText, ScoreBar, SectionTitle } from '@/components/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  Logo,
+  PctText,
+  ScoreBar,
+  SectionTitle,
+} from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
 import { useDeck } from '@/store/deck';
 import { useMarket } from '@/store/market';
@@ -35,18 +44,32 @@ export default function CompanyDetailScreen() {
   const quote = useMarket((s) => (symbol ? s.quotes[symbol] : undefined));
   const report = useResearch((s) => (symbol ? s.reports[symbol] : undefined));
   const [candles, setCandles] = useState<Candle[] | null>(null);
+  const [loadingCandles, setLoadingCandles] = useState(true);
   const [range, setRange] = useState<(typeof RANGES)[number]>(RANGES[1]);
+  const [scrub, setScrub] = useState<number | null>(null);
 
   const card = catalogEntry?.card ?? deckCard;
 
   useEffect(() => {
-    if (symbol) fetchDailyCandles(symbol).then(setCandles);
+    if (!symbol) return;
+    let live = true;
+    setLoadingCandles(true);
+    fetchDailyCandles(symbol).then((c) => {
+      if (!live) return;
+      setCandles(c);
+      setLoadingCandles(false);
+    });
+    return () => {
+      live = false;
+    };
   }, [symbol]);
 
-  const series = useMemo(
-    () => (candles ? lastNCandles(candles, range.days).map((c) => c.close) : []),
+  const windowed = useMemo(
+    () => (candles ? lastNCandles(candles, range.days) : []),
     [candles, range],
   );
+  const series = useMemo(() => windowed.map((c) => c.close), [windowed]);
+  const seriesDates = useMemo(() => windowed.map((c) => c.date), [windowed]);
 
   // A company you own but never swiped has no deck card — the research brief is
   // then the only analysis there is, and it's plenty.
@@ -112,6 +135,7 @@ export default function CompanyDetailScreen() {
 
   const price = quote?.price ?? card.price;
   const changePct = quote?.changePct ?? card.changePct;
+  const scrubPrice = scrub !== null && series[scrub] !== undefined ? series[scrub] : null;
   const m = card.metrics;
   const analyst = card.signals.analyst;
 
@@ -139,8 +163,14 @@ export default function CompanyDetailScreen() {
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.price}>{fmtMoney(price)}</Text>
-            <PctText value={changePct} />
+            <Text style={styles.price}>{fmtMoney(scrubPrice ?? price)}</Text>
+            {scrubPrice !== null ? (
+              <Text style={{ color: colors.faint, fontSize: 12 }}>
+                {seriesDates[scrub as number]}
+              </Text>
+            ) : (
+              <PctText value={changePct} />
+            )}
           </View>
         </View>
 
@@ -168,38 +198,28 @@ export default function CompanyDetailScreen() {
           </TouchableOpacity>
         ) : null}
 
-        <Card style={{ marginTop: spacing.lg }}>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm }}>
-            {RANGES.map((r) => (
-              <TouchableOpacity
-                key={r.label}
-                style={[styles.rangeBtn, range.label === r.label && styles.rangeBtnActive]}
-                onPress={() => setRange(r)}>
-                <Text
-                  style={{
-                    color: range.label === r.label ? '#08111E' : colors.muted,
-                    fontSize: 12,
-                    fontWeight: '700',
-                  }}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <LineChart
-            values={series}
-            width={width - spacing.lg * 4}
-            height={170}
-            labels={
-              candles && series.length > 1
-                ? {
-                    left: lastNCandles(candles, range.days)[0]?.date ?? '',
-                    right: 'today',
-                  }
-                : undefined
-            }
-          />
-        </Card>
+        {series.length > 1 || loadingCandles ? (
+          <Card style={{ marginTop: spacing.lg }}>
+            <InteractiveChart
+              values={series}
+              dates={seriesDates}
+              width={width - spacing.lg * 4}
+              height={170}
+              loading={loadingCandles}
+              onScrub={setScrub}
+            />
+            <View style={{ marginTop: spacing.sm }}>
+              <RangePills
+                ranges={RANGES.map((r) => r.label)}
+                value={range.label}
+                onChange={(label) => {
+                  setScrub(null);
+                  setRange(RANGES.find((r) => r.label === label) ?? RANGES[1]);
+                }}
+              />
+            </View>
+          </Card>
+        ) : null}
 
         <SectionTitle>Why it was recommended</SectionTitle>
         <Card>
@@ -320,15 +340,14 @@ export default function CompanyDetailScreen() {
           </>
         ) : null}
 
-        <TouchableOpacity
-          style={styles.researchBtn}
-          onPress={() => router.push(report ? `/research/${card.symbol}` : '/research')}>
-          <Text style={styles.researchBtnTxt}>
-            {report
-              ? `Full research brief · evidence & sources`
-              : 'Run deep research on this company'}
-          </Text>
-        </TouchableOpacity>
+        {/* The Research tab runs a whole scope, not one company, so the old
+            label promised something it could not deliver. */}
+        <Button
+          label={report ? 'Full research brief · evidence & sources' : 'Open deep research'}
+          variant="secondary"
+          tone={colors.purple}
+          onPress={() => router.push(report ? `/research/${card.symbol}` : '/research')}
+        />
 
         <Text style={styles.footer}>
           Analyzed {card.builtAt.slice(0, 10)} · educational analysis, not financial advice.

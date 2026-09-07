@@ -12,7 +12,7 @@ import {
 import { showDialog } from '@/components/Dialog';
 import { CatalogGrid, GridItem } from '@/components/CatalogGrid';
 import { NameInputModal } from '@/components/NameInputModal';
-import { Card, Chip, EmptyState, Logo, PctText, ScoreBar } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, Logo, PctText, ScoreBar } from '@/components/ui';
 import { useCatalog } from '@/store/catalog';
 import { Folder, useFolders } from '@/store/folders';
 import { useMarket } from '@/store/market';
@@ -32,8 +32,11 @@ export default function CatalogScreen() {
   const renameFolder = useFolders((s) => s.renameFolder);
   const deleteFolder = useFolders((s) => s.deleteFolder);
   const addSymbol = useFolders((s) => s.addSymbol);
+  const toggleSymbol = useFolders((s) => s.toggleSymbol);
+  const foldersForSymbol = useFolders((s) => s.foldersForSymbol);
 
   const [peek, setPeek] = useState<CatalogEntry | null>(null);
+  const [filing, setFiling] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<Folder | null>(null);
   const [namingNew, setNamingNew] = useState<{ folderId: string } | null>(null);
 
@@ -211,27 +214,94 @@ export default function CatalogScreen() {
               <Text style={styles.peekBlurb}>{peek.card.thesis.blurb}</Text>
               <ScoreBar label="Long-term score" value={peek.card.longTermScore} color={colors.blue} />
               <ScoreBar label="Momentum score" value={peek.card.momentumScore} color={colors.purple} />
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.md }}>
-                <TouchableOpacity
-                  style={[styles.peekBtn, { backgroundColor: colors.blue }]}
+              <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                <Button
+                  label="Full analysis"
                   onPress={() => {
                     const sym = peek.card.symbol;
                     setPeek(null);
                     router.push(`/company/${sym}`);
-                  }}>
-                  <Text style={{ color: '#08111E', fontWeight: '800' }}>Full analysis</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.peekBtn, { backgroundColor: colors.surfaceAlt }]}
+                  }}
+                />
+                {/* Filing used to require dragging one tile onto another —
+                    a gesture with no on-screen equivalent anywhere. */}
+                <Button
+                  label="Add to group…"
+                  variant="secondary"
+                  onPress={() => setFiling(peek.card.symbol)}
+                />
+                <Button
+                  label="Remove from catalog"
+                  variant="ghost"
+                  tone={colors.red}
+                  size="sm"
                   onPress={() => {
-                    removeFromCatalog(peek.card.symbol);
+                    const sym = peek.card.symbol;
+                    const inFolders = foldersForSymbol(sym).length;
                     setPeek(null);
-                  }}>
-                  <Text style={{ color: colors.red, fontWeight: '700' }}>Remove</Text>
-                </TouchableOpacity>
+                    showDialog(
+                      `Remove ${sym}?`,
+                      inFolders > 0
+                        ? `This takes ${sym} out of your catalog and out of ${inFolders} group${inFolders === 1 ? '' : 's'}. Its saved analysis is discarded.`
+                        : `This takes ${sym} out of your catalog and discards its saved analysis.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Remove',
+                          style: 'destructive',
+                          onPress: () => removeFromCatalog(sym),
+                        },
+                      ],
+                    );
+                  }}
+                />
               </View>
             </View>
           ) : null}
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Which groups is this stock in? A checklist beats a drag gesture. */}
+      <Modal visible={filing !== null} transparent animationType="fade" onRequestClose={() => setFiling(null)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setFiling(null)}>
+          <View style={styles.peekCard}>
+            <Text style={styles.peekName}>Add {filing} to a group</Text>
+            {folders.length === 0 ? (
+              <Text style={styles.peekSub}>You have no groups yet.</Text>
+            ) : (
+              folders.map((f) => {
+                const inIt = f.symbols.includes(filing ?? '');
+                return (
+                  <TouchableOpacity
+                    key={f.id}
+                    onPress={() => filing && toggleSymbol(f.id, filing)}
+                    style={styles.fileRow}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: inIt }}>
+                    <Text style={{ color: inIt ? colors.blue : colors.faint, fontSize: 17, width: 24 }}>
+                      {inIt ? '✓' : '○'}
+                    </Text>
+                    <Text style={{ color: colors.text, fontSize: 15, flex: 1 }}>{f.name}</Text>
+                    <Text style={styles.folderSub}>{f.symbols.length}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+            <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+              <Button
+                label="New group…"
+                variant="secondary"
+                onPress={() => {
+                  if (!filing) return;
+                  const id = createFolder('New group');
+                  addSymbol(id, filing);
+                  setFiling(null);
+                  setNamingNew({ folderId: id });
+                }}
+              />
+              <Button label="Done" variant="ghost" onPress={() => setFiling(null)} />
+            </View>
+          </View>
         </TouchableOpacity>
       </Modal>
 
@@ -285,5 +355,12 @@ const styles = StyleSheet.create({
   peekSub: { color: colors.muted, fontSize: 12 },
   peekPrice: { color: colors.text, fontWeight: '700', fontVariant: ['tabular-nums'] },
   peekBlurb: { color: colors.muted, fontSize: 14, lineHeight: 20, marginVertical: spacing.md },
-  peekBtn: { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
 });
