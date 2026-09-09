@@ -45,7 +45,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "screener:test": "tsc -p tsconfig.scripts.json && node .scripts-build/scripts/screener/test.js",
-    "screener:fetch": "tsc -p tsconfig.scripts.json && node .scripts-build/scripts/screener/fetch.js"
+    "screener:fetch": "tsc -p tsconfig.scripts.json && node .scripts-build/scripts/screener/fetch.js",
+    "charts:fetch": "tsc -p tsconfig.scripts.json && node .scripts-build/scripts/charts/fetch.js"
   },
   "private": true
 }

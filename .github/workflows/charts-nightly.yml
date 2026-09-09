@@ -1,0 +1,76 @@
+# Publishes daily price history so the web app can draw charts.
+#
+# The PWA cannot fetch history itself — no market data host sends CORS headers,
+# so the browser blocks the request and every chart comes back empty. This job
+# fetches the history and commits it under public/data/charts/, which Pages
+# then serves from the app's own origin.
+#
+# Unlike the screener index, a partial run still publishes: a chart is
+# per-company, so the symbols that worked are worth having.
+
+name: Nightly price history
+
+on:
+  schedule:
+    # 22:45 UTC on weekdays — after the 16:00 ET close in both EST and EDT,
+    # and before the screener job so the two do not push over each other.
+    - cron: '45 22 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: 'Extra tickers to include, comma separated (e.g. RKLB,IONQ)'
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: charts-nightly
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Fetch daily price history
+        env:
+          EXTRA_SYMBOLS: ${{ inputs.symbols }}
+        timeout-minutes: 30
+        run: npm run charts:fetch
+
+      - name: Commit the refreshed history
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          if git diff --cached --quiet; then
+            echo "No change — market holiday, or nothing new since the last run."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Price history: $(date -u +%Y-%m-%d)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # A push made with GITHUB_TOKEN does not trigger other workflows, so the
+  # deploy has to be invoked explicitly or the new data never reaches Pages.
+  publish:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy-pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
