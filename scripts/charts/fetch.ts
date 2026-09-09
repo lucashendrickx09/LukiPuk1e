@@ -61,11 +61,19 @@ async function fromStooq(symbol: string): Promise<Candle[] | null> {
   return out.length >= 30 ? out : null;
 }
 
-/** Yahoo chart API — the fallback when Stooq refuses a symbol or the runner. */
-async function fromYahoo(symbol: string): Promise<Candle[] | null> {
+/**
+ * Yahoo's chart endpoint — the fallback when Stooq refuses a symbol or a
+ * runner.
+ *
+ * Note this is not the endpoint the screener job uses. That one calls
+ * `quoteSummary` for fundamentals, which is throttled far harder and answers
+ * 429 to everything from a GitHub runner. Plain chart data is cheaper, so it
+ * is worth trying even though the screener cannot get through. The two API
+ * hosts are rate-limited separately, so each is its own source.
+ */
+async function fromYahooHost(host: string, symbol: string): Promise<Candle[] | null> {
   const url =
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
-    '?range=2y&interval=1d';
+    `https://${host}/v8/finance/chart/${encodeURIComponent(symbol)}?range=2y&interval=1d`;
   const res = await fetch(url, { headers: { 'User-Agent': UA } });
   if (!res.ok) throw new Error(`yahoo HTTP ${res.status}`);
   const json = (await res.json()) as {
@@ -87,7 +95,8 @@ async function fromYahoo(symbol: string): Promise<Candle[] | null> {
 
 const SOURCES: { name: string; get: (s: string) => Promise<Candle[] | null> }[] = [
   { name: 'stooq', get: fromStooq },
-  { name: 'yahoo', get: fromYahoo },
+  { name: 'yahoo1', get: (s) => fromYahooHost('query1.finance.yahoo.com', s) },
+  { name: 'yahoo2', get: (s) => fromYahooHost('query2.finance.yahoo.com', s) },
 ];
 
 /**

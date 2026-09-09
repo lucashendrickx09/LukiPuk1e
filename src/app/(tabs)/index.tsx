@@ -319,7 +319,8 @@ export default function PortfolioScreen() {
           </>
         ) : (
           <Text style={styles.noHistory}>
-            No value history yet — the free price-history source is often blocked in the browser.
+            No value history yet. Price history is published each weekday evening; holdings added
+            since the last run appear after the next one.
           </Text>
         )}
 

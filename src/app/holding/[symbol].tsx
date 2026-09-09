@@ -230,8 +230,8 @@ export default function HoldingDetailScreen() {
             </>
           ) : (
             <Text style={styles.note}>
-              No price history — the free history source is often blocked in the browser. It works
-              in the native app build.
+              No price history for {holding.symbol} yet. It is published each weekday evening — a
+              ticker added since the last run appears after the next one.
             </Text>
           )}
         </Card>
